@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ISHU · PHYSIQUE OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0A0E1A;
+  --card:rgba(255,255,255,.030);
+  --card2:rgba(255,255,255,.048);
+  --line:rgba(255,255,255,.07);
+  --line2:rgba(255,255,255,.14);
+  --txt:#E9EDF6;
+  --dim:#8B95AC;
+  --dim2:#636D84;
+  --ember:#FF6A3D;
+  --gold:#FFC24B;
+  --cyan:#3DD8FF;
+  --violet:#A78BFA;
+  --green:#4ADE80;
+  --r:18px;
+  --ease:cubic-bezier(.22,.7,.25,1);
+  --lim:cubic-bezier(.45,.05,.55,.95);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+   radial-gradient(780px 420px at 12% -6%, rgba(255,106,61,.16), transparent 70%),
+   radial-gradient(680px 420px at 92% 4%, rgba(255,194,75,.10), transparent 70%),
+   radial-gradient(900px 600px at 70% 100%, rgba(61,216,255,.055), transparent 72%);
+}
+.wrap{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:22px 18px 56px}
+h1,h2,h3{margin:0;font-family:'Space Grotesk',sans-serif;font-weight:600;letter-spacing:-.01em}
+.num{font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+
+/* ---------- header ---------- */
+.top{
+  display:flex;flex-wrap:wrap;align-items:center;gap:16px;
+  padding:16px 18px;margin-bottom:18px;
+  background:linear-gradient(140deg,rgba(255,106,61,.10),rgba(255,255,255,.026) 46%);
+  border:1px solid var(--line);border-radius:22px;
+}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.mark{
+  width:46px;height:46px;flex:none;border-radius:14px;
+  background:linear-gradient(145deg,var(--ember),var(--gold));
+  display:grid;place-items:center;color:#160901;
+  font-family:'Unbounded',sans-serif;font-weight:800;font-size:17px;
+  box-shadow:0 8px 24px rgba(255,106,61,.32);
+}
+.brand-t{font-family:'Unbounded',sans-serif;font-weight:800;font-size:19px;letter-spacing:.01em;line-height:1.1}
+.brand-s{font-size:11.5px;color:var(--dim);letter-spacing:.16em;font-weight:500}
+.top-mid{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-left:auto}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:7px 13px;border-radius:999px;border:1px solid var(--line2);
+  background:var(--card);font-size:12.5px;color:var(--txt);white-space:nowrap;
+}
+.chip b{font-family:'Space Grotesk',sans-serif;font-weight:600}
+.chip.phase{border-color:rgba(255,106,61,.42);background:rgba(255,106,61,.11);color:#FFD1B8}
+.chip.sess{border-color:rgba(255,194,75,.34);background:rgba(255,194,75,.09);color:#FFE4AE}
+.chip.streak{border-color:rgba(255,194,75,.4);background:linear-gradient(120deg,rgba(255,106,61,.18),rgba(255,194,75,.12))}
+.streak-in{
+  width:34px;background:none;border:none;color:var(--gold);
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;
+  text-align:right;padding:0;
+}
+.streak-in::-webkit-outer-spin-button,.streak-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* ---------- grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.c4{grid-column:span 4}.c5{grid-column:span 5}.c7{grid-column:span 7}.c8{grid-column:span 8}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.28);min-width:0;
+}
+.card.acc-cyan{background:linear-gradient(170deg,rgba(61,216,255,.075),var(--card) 58%);border-color:rgba(61,216,255,.2)}
+.card.acc-violet{background:linear-gradient(170deg,rgba(167,139,250,.08),var(--card) 58%);border-color:rgba(167,139,250,.2)}
+.chead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+.chead h2{font-size:14.5px}
+.tag{font-size:11px;color:var(--dim2);letter-spacing:.08em}
+.demo{
+  font-size:10.5px;color:#FFD9A8;background:rgba(255,194,75,.1);
+  border:1px solid rgba(255,194,75,.25);border-radius:6px;padding:2px 7px;white-space:nowrap;
+}
+.note{font-size:11.5px;color:var(--dim2);line-height:1.5;margin-top:10px}
+.sep{height:1px;background:var(--line);margin:14px 0}
+
+/* ---------- generic bits ---------- */
+button{font-family:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:8px}
+input,select{font-family:inherit;color:var(--txt)}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:10.5px;color:var(--dim2)}
+.fld input,.fld select{
+  background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:9px;
+  padding:7px 9px;font-size:13px;font-family:'Space Grotesk',sans-serif;width:100%;
+}
+.fld input:focus,.fld select:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.bar{height:7px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:99px;transition:width .85s var(--ease)}
+
+/* ---------- weight ---------- */
+.big{font-size:40px;font-weight:600;line-height:1}
+.big small{font-size:15px;color:var(--dim);font-weight:500;margin-left:4px}
+.wrow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.delta{font-size:12.5px;padding:4px 9px;border-radius:8px;background:rgba(74,222,128,.12);color:var(--green);border:1px solid rgba(74,222,128,.25)}
+.wmeta{display:flex;gap:18px;margin-top:12px;font-size:12px;color:var(--dim)}
+.wmeta b{color:var(--txt);font-family:'Space Grotesk',sans-serif}
+.prog{margin-top:14px}
+.prog .ends{display:flex;justify-content:space-between;font-size:11px;color:var(--dim2);margin-bottom:6px}
+.prog .bar i{background:linear-gradient(90deg,var(--ember),var(--gold))}
+.spark{width:100%;height:52px;margin-top:12px;display:block}
+.wedit{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+
+/* ---------- ring ---------- */
+.ringwrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.ring{position:relative;width:176px;height:176px;flex:none;margin:auto}
+.ring svg{transform:rotate(-90deg);display:block}
+.ring .track{stroke:rgba(255,255,255,.07)}
+.ring .fill{stroke:url(#burn);stroke-linecap:round;transition:stroke-dashoffset .9s var(--ease)}
+.ring-mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.ring-mid .n{font-size:33px;font-weight:600;line-height:1;font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
+.ring-mid .l{font-size:10.5px;color:var(--dim2);letter-spacing:.1em;margin-top:5px}
+.klist{flex:1;min-width:150px;display:flex;flex-direction:column;gap:9px}
+.krow{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--dim);gap:10px}
+.krow b{font-family:'Space Grotesk',sans-serif;font-weight:600;color:var(--txt);font-size:14px}
+.krow.hi b{color:var(--gold)}
+
+/* ---------- macros ---------- */
+.macro{margin-bottom:16px}
+.macro:last-of-type{margin-bottom:0}
+.macro .mtop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:8px}
+.macro .mname{font-size:12.5px;color:var(--dim)}
+.macro .mval{font-family:'Space Grotesk',sans-serif;font-size:13.5px}
+.macro .mval s{text-decoration:none;color:var(--dim2)}
+.macro .msub{display:flex;justify-content:space-between;font-size:11px;color:var(--dim2);margin-top:5px}
+.macro.p{padding:13px;margin:-4px -4px 14px;border-radius:14px;background:rgba(255,106,61,.07);border:1px solid rgba(255,106,61,.22)}
+.macro.p .mname{color:#FFC9B2}
+.macro.p .bar{height:10px}
+.macro.p .bar i{background:linear-gradient(90deg,var(--ember),var(--gold))}
+.macro.c .bar i{background:linear-gradient(90deg,#5B8DEF,#7FB2FF)}
+.macro.f .bar i{background:linear-gradient(90deg,#B98CFF,#D9BBFF)}
+
+/* ---------- session ---------- */
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{
+  flex:none;padding:6px 11px;border-radius:10px;border:1px solid var(--line);
+  background:transparent;font-size:11.5px;color:var(--dim);font-family:'Space Grotesk',sans-serif;
+  transition:background .2s,color .2s,border-color .2s;
+}
+.day:hover{border-color:var(--line2);color:var(--txt)}
+.day[aria-pressed="true"]{background:linear-gradient(120deg,var(--ember),var(--gold));border-color:transparent;color:#190A02;font-weight:600}
+.day.today::after{content:"·";margin-left:5px;color:var(--gold)}
+.sess{display:grid;grid-template-columns:1.02fr .98fr;gap:16px}
+.exlist{display:flex;flex-direction:column;gap:7px;max-height:none}
+.ex{
+  width:100%;display:flex;gap:11px;align-items:flex-start;text-align:left;
+  padding:10px 11px;border-radius:13px;border:1px solid var(--line);
+  background:rgba(255,255,255,.018);transition:border-color .2s,background .2s,transform .15s;
+}
+.ex:hover{background:rgba(255,255,255,.05);border-color:var(--line2)}
+.ex[aria-current="true"]{border-color:rgba(255,194,75,.5);background:rgba(255,194,75,.07)}
+.ex.done{opacity:.55}
+.ex.done .exname{text-decoration:line-through;text-decoration-color:var(--dim2)}
+.tick{
+  width:22px;height:22px;flex:none;margin-top:1px;border-radius:7px;
+  border:1.5px solid var(--line2);background:transparent;display:grid;place-items:center;
+  font-size:12px;color:transparent;transition:.2s;
+}
+.tick[aria-pressed="true"]{background:rgba(74,222,128,.18);border-color:var(--green);color:var(--green)}
+.exmain{min-width:0;flex:1}
+.exname{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:500;line-height:1.3}
+.exmeta{font-size:11.5px;color:var(--dim);margin-top:3px}
+.exmeta em{font-style:normal;color:var(--gold)}
+.exalt{font-size:11px;color:var(--dim2);margin-top:4px}
+
+.stage{
+  border:1px solid var(--line);border-radius:14px;
+  background:radial-gradient(120% 90% at 50% 0%,rgba(255,106,61,.10),rgba(255,255,255,.02) 65%);
+  padding:12px;display:flex;flex-direction:column;gap:10px;
+}
+.stage-t{font-family:'Space Grotesk',sans-serif;font-size:13px}
+.figbox{border-radius:11px;background:rgba(0,0,0,.22);border:1px solid var(--line);overflow:hidden}
+.figbox svg{width:100%;height:auto;display:block}
+#fig .limb{stroke:url(#limb);stroke-width:6;stroke-linecap:round;fill:none}
+#fig .head{fill:none;stroke:url(#limb);stroke-width:5}
+#fig .imp{fill:var(--cyan);stroke:none}
+#fig .imp-l{stroke:var(--cyan);stroke-width:6;stroke-linecap:round;fill:none}
+#fig .gear{stroke:rgba(255,255,255,.20);stroke-width:5;stroke-linecap:round;fill:none}
+#fig .gearf{fill:rgba(255,255,255,.09);stroke:rgba(255,255,255,.18);stroke-width:1.5}
+#fig .floor{stroke:rgba(255,255,255,.16);stroke-width:2;stroke-dasharray:2 6}
+#fig g[class^="p-"]{transform-box:view-box}
+.belt{stroke:rgba(61,216,255,.35);stroke-width:3;stroke-dasharray:10 12;animation:belt .7s linear infinite}
+@keyframes belt{to{stroke-dashoffset:-22px}}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags span{font-size:10.5px;padding:3px 8px;border-radius:7px;background:rgba(255,194,75,.10);border:1px solid rgba(255,194,75,.22);color:#FFE2AF}
+.cue{font-size:12px;color:var(--txt);background:rgba(255,255,255,.04);border-left:2px solid var(--gold);padding:8px 10px;border-radius:0 9px 9px 0}
+.safe{font-size:10.5px;color:var(--dim2)}
+
+/* ---------- water ---------- */
+.glasses{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:4px 0 12px}
+.glass{
+  position:relative;aspect-ratio:.62;border:1.5px solid rgba(61,216,255,.35);
+  border-top-width:1px;border-radius:5px 5px 10px 10px;background:rgba(61,216,255,.05);
+  overflow:hidden;padding:0;transition:border-color .2s,transform .15s;
+}
+.glass:hover{border-color:var(--cyan);transform:translateY(-2px)}
+.glass i{
+  position:absolute;left:0;right:0;bottom:0;height:0;
+  background:linear-gradient(180deg,rgba(61,216,255,.85),rgba(61,216,255,.45));
+  transition:height .45s var(--ease);
+}
+.glass[aria-pressed="true"]{border-color:var(--cyan);box-shadow:0 0 14px rgba(61,216,255,.22) inset}
+.glass[aria-pressed="true"] i{height:88%}
+.wstat{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px}
+.wstat .big{color:var(--cyan)}
+.acc-cyan .bar i{background:linear-gradient(90deg,#1FA8D8,var(--cyan))}
+.wctl{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+
+/* ---------- meals ---------- */
+.meal{
+  display:flex;gap:11px;align-items:flex-start;
+  padding:12px;border-radius:14px;border:1px solid var(--line);
+  background:rgba(255,255,255,.018);margin-bottom:8px;transition:.2s;
+}
+.meal:last-of-type{margin-bottom:0}
+.meal.eaten{background:rgba(74,222,128,.055);border-color:rgba(74,222,128,.22)}
+.meal-b{flex:1;min-width:0}
+.meal-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.meal-n{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:500}
+.meal-t{font-size:11px;color:var(--gold);font-family:'Space Grotesk',sans-serif}
+.meal-f{font-size:12px;color:var(--dim);margin-top:4px}
+.meal-p{font-size:11px;color:var(--dim2);margin-top:4px;font-style:italic}
+.mac{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.mac span{font-size:10.5px;font-family:'Space Grotesk',sans-serif;padding:3px 7px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--dim)}
+.mac span.k{color:var(--gold);border-color:rgba(255,194,75,.25)}
+.mac span.pr{color:#FFB599;border-color:rgba(255,106,61,.3)}
+.fuel-sum{display:flex;flex-wrap:wrap;gap:14px;padding:11px 13px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line);margin-bottom:12px;font-size:12px;color:var(--dim)}
+.fuel-sum b{font-family:'Space Grotesk',sans-serif;color:var(--txt)}
+
+/* ---------- supplements ---------- */
+.supp{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}
+.supp:last-child{border-bottom:none;padding-bottom:0}
+.supp-t{font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--gold);width:62px;flex:none;padding-top:2px}
+.supp-b{flex:1;min-width:0}
+.supp-n{font-size:13px;font-family:'Space Grotesk',sans-serif}
+.supp.done .supp-n{color:var(--green)}
+.supp-d{font-size:11.5px;color:var(--dim);margin-top:2px}
+
+/* ---------- sleep ---------- */
+.sleep-top{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.sleep-top .big{color:var(--violet)}
+.sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
+.sbars{display:flex;align-items:flex-end;gap:6px;height:78px;margin-top:6px;position:relative}
+.sbar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:5px;align-items:center}
+.sbar i{
+  width:100%;border-radius:6px 6px 3px 3px;height:0;
+  background:linear-gradient(180deg,var(--violet),rgba(167,139,250,.35));
+  transition:height .8s var(--ease);
+}
+.sbar.short i{background:linear-gradient(180deg,#F87171,rgba(248,113,113,.3))}
+.sbar span{font-size:9.5px;color:var(--dim2)}
+.goalline{position:absolute;left:0;right:0;border-top:1px dashed rgba(167,139,250,.5)}
+.stages{display:flex;height:10px;border-radius:99px;overflow:hidden;margin-top:6px}
+.stages i{height:100%}
+.slegend{display:flex;gap:12px;font-size:11px;color:var(--dim2);margin-top:7px;flex-wrap:wrap}
+.slegend s{text-decoration:none;display:inline-block;width:8px;height:8px;border-radius:3px;margin-right:5px}
+
+/* ---------- insights ---------- */
+.ins-wrap{border-radius:20px;padding:1.5px;background:linear-gradient(135deg,var(--ember),var(--gold) 42%,rgba(167,139,250,.6) 100%)}
+.ins{background:#0B1020;border-radius:19px;padding:18px}
+.ins-item{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.ins-item:last-child{border-bottom:none;padding-bottom:0}
+.ins-item:first-child{padding-top:4px}
+.ins-ic{
+  width:30px;height:30px;flex:none;border-radius:10px;display:grid;place-items:center;font-size:14px;
+  background:rgba(255,194,75,.11);border:1px solid rgba(255,194,75,.24);
+}
+.ins-h{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:3px}
+.ins-p{font-size:12.5px;color:var(--dim);line-height:1.6}
+.ins-p b{color:var(--txt);font-family:'Space Grotesk',sans-serif;font-weight:500}
+
+.foot{margin-top:22px;font-size:11px;color:var(--dim2);line-height:1.6;max-width:76ch}
+
+/* ---------- responsive ---------- */
+@media (max-width:1080px){
+  .c4,.c5,.c7,.c8{grid-column:span 6}
+  .grid{grid-template-columns:repeat(6,1fr)}
+  .sess{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .wrap{padding:14px 12px 44px}
+  .grid{grid-template-columns:1fr;gap:13px}
+  .c4,.c5,.c7,.c8{grid-column:span 1}
+  .top{padding:14px;border-radius:18px}
+  .top-mid{margin-left:0;width:100%}
+  .big{font-size:34px}
+  .glasses{grid-template-columns:repeat(5,1fr)}
+  .ring{width:150px;height:150px}
+  .card{padding:15px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .glass[aria-pressed="true"] i{height:88%}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN GATE ============ -->
+<div id="loginScreen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div class="card" style="max-width:360px;width:100%">
+    <div class="chead"><h2>Physique OS</h2><span class="tag">sign in</span></div>
+    <p class="note" id="loginMsg" style="margin-top:0">Sign in to load your log.</p>
+    <div class="fld" style="margin-bottom:10px">
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" autocomplete="username">
+    </div>
+    <div class="fld" style="margin-bottom:14px">
+      <label for="loginPass">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+    </div>
+    <button id="loginBtn" style="width:100%;padding:10px;border-radius:10px;border:none;cursor:pointer;
+      background:linear-gradient(120deg,var(--ember),var(--gold));color:#190A02;font-weight:600;
+      font-family:'Space Grotesk',sans-serif;font-size:13.5px">Log in</button>
+  </div>
+</div>
+
+<div class="wrap" id="dashboard" style="display:none">
+
+<!-- ============ HEADER ============ -->
+<header class="top">
+  <div class="brand">
+    <div class="mark" aria-hidden="true">IS</div>
+    <div>
+      <div class="brand-t">ISHU</div>
+      <div class="brand-s">PHYSIQUE OS</div>
+    </div>
+  </div>
+  <div class="top-mid">
+    <span class="chip" id="dateChip">—</span>
+    <span class="chip phase">Recomposition / fat loss</span>
+    <span class="chip sess" id="sessChip">Mon · Push A</span>
+    <span class="chip" id="todayChip">Today</span>
+    <span class="chip streak">🔥
+      <label for="streak" style="font-size:11.5px;color:var(--dim)">streak</label>
+      <input class="streak-in num" id="streak" type="number" min="0" max="999" value="12" aria-label="Current streak in days">
+      <b style="color:var(--dim)">d</b>
+    </span>
+    <span class="chip" id="saveChip" style="border-color:rgba(74,222,128,.3);color:var(--green)" aria-live="polite">Saved locally</span>
+    <button class="chip" id="lockDay" style="border-color:rgba(255,194,75,.4);background:linear-gradient(120deg,rgba(255,106,61,.16),rgba(255,194,75,.10));font-weight:600;cursor:pointer">Lock today&rsquo;s log →</button>
+    <button id="logoutBtn" style="background:none;border:none;color:var(--dim2);font-size:11px;
+      cursor:pointer;text-decoration:underline;padding:4px;font-family:inherit">Log out</button>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- ============ 1. WEIGHT ============ -->
+  <section class="card c4" aria-labelledby="h-w">
+    <div class="chead"><h2 id="h-w">Body weight</h2><span class="demo" id="wHistTag">sample history</span></div>
+    <div class="wrow">
+      <div class="big num"><span id="wNow" data-count="85.4" data-dec="1">0</span><small>kg</small></div>
+      <span class="delta" id="delta">−0.8 kg vs last week</span>
+    </div>
+    <div class="wmeta">
+      <span>Height <b>180 cm · 5&prime;11&Prime;</b></span>
+      <span>BMI <b class="num" id="bmi">—</b></span>
+    </div>
+    <div class="prog">
+      <div class="ends"><span>Start 89.5 kg</span><span id="goalLbl">Goal 78 kg</span></div>
+      <div class="bar"><i id="wbar"></i></div>
+      <div class="ends" style="margin:6px 0 0"><span id="wpct">—</span><span id="wleft">—</span></div>
+    </div>
+    <svg class="spark" id="spark" viewBox="0 0 300 52" preserveAspectRatio="none" role="img" aria-label="Weekly weight trend"></svg>
+    <div class="wedit">
+      <div class="fld"><label for="todayW">Today&rsquo;s weight (kg)</label><input id="todayW" type="number" value="85.4" min="50" max="150" step="0.1"></div>
+      <div class="fld"><label for="goalW">Goal weight (kg)</label><input id="goalW" type="number" value="78" min="55" max="120" step="0.5"></div>
+    </div>
+    <div class="wedit">
+      <div class="fld"><label for="goalD">Target date</label><input id="goalD" type="date" value="2026-12-27"></div>
+    </div>
+    <p class="note">Track weekly averages, not single-day fluctuations. BMI is a screening number only — it can't tell muscle from fat. Enter today&rsquo;s weight once each morning; it saves automatically and feeds the trend line above.</p>
+  </section>
+
+  <!-- ============ 2. CALORIES ============ -->
+  <section class="card c4" aria-labelledby="h-k">
+    <div class="chead"><h2 id="h-k">Calories</h2><span class="tag">fat loss phase</span></div>
+    <div class="ringwrap">
+      <div class="ring">
+        <svg viewBox="0 0 176 176" aria-hidden="true">
+          <defs>
+            <linearGradient id="burn" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#FF6A3D"/><stop offset="1" stop-color="#FFC24B"/>
+            </linearGradient>
+          </defs>
+          <circle class="track" cx="88" cy="88" r="76" fill="none" stroke-width="13"/>
+          <circle class="fill" id="ring" cx="88" cy="88" r="76" fill="none" stroke-width="13"
+            stroke-dasharray="477.5" stroke-dashoffset="477.5"/>
+        </svg>
+        <div class="ring-mid">
+          <div class="n" id="kEaten">0</div>
+          <div class="l">EATEN</div>
+        </div>
+      </div>
+      <div class="klist">
+        <div class="krow hi"><span>Daily target</span><b class="num"><span data-count="2200">0</span></b></div>
+        <div class="krow"><span>Remaining</span><b class="num" id="kLeft">—</b></div>
+        <div class="krow"><span>Training burn (est.)</span><b class="num">~420</b></div>
+        <div class="krow"><span>Maintenance (est.)</span><b class="num">~2,800</b></div>
+        <div class="krow"><span>Deficit</span><b class="num" style="color:var(--ember)">~600/day</b></div>
+      </div>
+    </div>
+    <p class="note">2,200 kcal is your target, recalculated at 85.4 kg from an estimated 2,800 kcal maintenance — roughly 0.55 kg/week. Training burn is an estimate from session type and duration, not a measurement, and it is <em>not</em> added back to your target. Tick meals in Fuel plan to fill the ring.</p>
+  </section>
+
+  <!-- ============ 3. MACROS ============ -->
+  <section class="card c4" aria-labelledby="h-m">
+    <div class="chead"><h2 id="h-m">Macros</h2><span class="tag">protein is the priority</span></div>
+
+    <div class="macro p">
+      <div class="mtop"><span class="mname">Protein</span>
+        <span class="mval num"><b id="pEat">0</b> <s>/ 155 g</s></span></div>
+      <div class="bar"><i id="pBar"></i></div>
+      <div class="msub"><span id="pPct">0%</span><span id="pLeft">155 g to go</span></div>
+    </div>
+
+    <div class="macro c">
+      <div class="mtop"><span class="mname">Carbohydrate</span>
+        <span class="mval num"><b id="cEat">0</b> <s>/ 245 g</s></span></div>
+      <div class="bar"><i id="cBar"></i></div>
+      <div class="msub"><span id="cPct">0%</span><span id="cLeft">245 g to go</span></div>
+    </div>
+
+    <div class="macro f">
+      <div class="mtop"><span class="mname">Fat</span>
+        <span class="mval num"><b id="fEat">0</b> <s>/ 68 g</s></span></div>
+      <div class="bar"><i id="fBar"></i></div>
+      <div class="msub"><span id="fPct">0%</span><span id="fLeft">68 g to go</span></div>
+    </div>
+
+    <div class="sep"></div>
+    <div class="krow"><span>Ideal protein ceiling</span><b class="num">170 g</b></div>
+    <div class="krow"><span>Hard floor in a deficit</span><b class="num">137 g</b></div>
+    <div class="krow"><span>Fibre</span><b class="num">32–38 g</b></div>
+    <p class="note">155 g is 1.8 g per kg at 85.4 kg — the practical target your ₹2,500 budget supports with one whey scoop a day. Cheapest way to push toward 170 g: 50 g dry soya chunks adds ~26 g protein for about ₹8.</p>
+  </section>
+
+  <!-- ============ 4. TODAY'S SESSION ============ -->
+  <section class="card c8" aria-labelledby="h-s">
+    <div class="chead">
+      <h2 id="h-s">Today&rsquo;s session</h2>
+      <span class="tag" id="sessTag">Mon · Push A</span>
+    </div>
+    <div class="days" id="days" role="group" aria-label="Choose a training day"></div>
+    <div class="sess">
+      <div>
+        <div class="exlist" id="exlist"></div>
+        <p class="note" id="exProgress">0 of 8 done</p>
+      </div>
+      <div class="stage">
+        <div class="stage-t" id="stageName">Pick an exercise</div>
+        <div class="figbox">
+          <svg id="fig" viewBox="0 0 240 215" role="img" aria-live="polite" aria-label="Animated figure demonstrating the selected exercise">
+            <defs>
+              <linearGradient id="limb" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#FF6A3D"/><stop offset="1" stop-color="#FFC24B"/>
+              </linearGradient>
+            </defs>
+            <g id="figbg"></g><g id="figbody"></g>
+          </svg>
+        </div>
+        <style id="figStyle"></style>
+        <div class="tags" id="stageTags"></div>
+        <div class="cue" id="stageCue">Tap any exercise on the left to see the movement.</div>
+        <div class="safe" id="stageAlt"></div>
+        <div class="safe">Form first &middot; stop if painful. Warm up 6&ndash;8 min: bike, band pull-aparts, 2 light ramp-up sets on the first lift.</div>
+      </div>
+    </div>
+    <p class="note">The block runs Monday to Sunday: three days on, Thursday active recovery, three days on. Thursday is a real session on the list — a walk, a stretch circuit and shoulder mobility — because unstructured rest days are the ones that quietly become nothing. Keep it easy enough that Friday feels better for it. Your shoulder is pain-free, so pressing stays in — but with neutral grips, cables instead of upright rows, and a friendlier swap listed on every press. Stop or modify any movement that causes pain; seek professional assessment for persistent or worsening symptoms. Loads are shown as effort targets, not as weights I know you can lift — pick a weight that leaves 2&ndash;3 reps in reserve and log it.</p>
+  </section>
+
+  <!-- ============ 5. WATER ============ -->
+  <section class="card acc-cyan c4" aria-labelledby="h-wa">
+    <div class="chead"><h2 id="h-wa">Water</h2><span class="tag">Pune · warm climate</span></div>
+    <div class="wstat">
+      <div class="big num"><span id="wLit">0.0</span><small>/ <span id="wTgt">3.4</span> L</small></div>
+      <span class="chip" style="border-color:rgba(61,216,255,.3)"><b id="wPct">0%</b></span>
+    </div>
+    <div class="bar"><i id="wBar2"></i></div>
+    <div class="glasses" id="glasses" role="group" aria-label="Tap a glass to log water"></div>
+    <div class="wctl">
+      <div class="fld"><label for="wTargetIn">Daily target (L)</label><input id="wTargetIn" type="number" value="3.4" min="1" max="6" step="0.25"></div>
+      <div class="fld"><label for="wGlassIn">Glass size (ml)</label><input id="wGlassIn" type="number" value="250" min="100" max="1000" step="50"></div>
+    </div>
+    <p class="note">3.4 L is a starting point from your body weight at 85.4 kg, a night training session and Pune&rsquo;s heat — not a rule. Drink to thirst and pale-yellow urine, push higher on hot days, and follow medical advice ahead of this number if you have any kidney or heart condition. Keep one bottle at your desk: most of this should be done before 8 PM so it doesn&rsquo;t wreck your sleep.</p>
+  </section>
+
+  <!-- ============ 6. FUEL PLAN ============ -->
+  <section class="card c7" aria-labelledby="h-f">
+    <div class="chead"><h2 id="h-f">Fuel plan</h2><span class="tag">vegetarian · home-style · ~₹85/day</span></div>
+    <div class="fuel-sum">
+      <span>Full day <b class="num">2,180 kcal</b></span>
+      <span>Protein <b class="num">150 g</b></span>
+      <span>Carbs <b class="num">251 g</b></span>
+      <span>Fat <b class="num">69 g</b></span>
+    </div>
+    <div id="meals"></div>
+    <p class="note">Values are approximations for standard home portions — your atta, oil quantity, paneer brand and dal thickness will move these by 10&ndash;15%. Weigh oats, paneer, soya and peanut butter for a week and the rest will look after itself. Everything here is on your list except soya chunks, which I&rsquo;ve added because they are the cheapest vegetarian protein available to you (~52 g protein per 100 g dry, around ₹15).</p>
+  </section>
+
+  <!-- ============ 8. SLEEP ============ -->
+  <section class="card acc-violet c5" aria-labelledby="h-sl">
+    <div class="chead"><h2 id="h-sl">Sleep</h2><span class="demo">demo data — edit to match your sleep</span></div>
+    <div class="sleep-top">
+      <div class="big num"><span id="slDur">6h 40m</span></div>
+      <div style="text-align:right;font-size:12px;color:var(--dim)">
+        <div>Goal <b class="num" style="color:var(--txt)" id="slGoalLbl">7.5 h</b></div>
+        <div>7-day gap <b class="num" style="color:#F87171" id="slDebt">—</b></div>
+      </div>
+    </div>
+    <div class="sgrid">
+      <div class="fld"><label for="bed">Bedtime</label><input id="bed" type="time" value="00:05"></div>
+      <div class="fld"><label for="wake">Wake-up</label><input id="wake" type="time" value="06:45"></div>
+      <div class="fld"><label for="slGoal">Sleep goal (h)</label><input id="slGoal" type="number" value="7.5" min="5" max="10" step="0.25"></div>
+      <div class="fld"><label for="slQual">Sleep quality</label>
+        <select id="slQual">
+          <option>Restless</option><option selected>Okay</option><option>Good</option><option>Excellent</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <div class="tag" style="margin-bottom:4px">Last 7 nights vs goal</div>
+      <div class="sbars" id="sbars"><div class="goalline" id="goalline"></div></div>
+    </div>
+    <div style="margin-top:14px">
+      <div class="tag">Estimated stage split</div>
+      <div class="stages">
+        <i style="width:18%;background:#6D4AEA"></i>
+        <i style="width:21%;background:var(--violet)"></i>
+        <i style="width:61%;background:rgba(167,139,250,.35)"></i>
+      </div>
+      <div class="slegend">
+        <span><s style="background:#6D4AEA"></s>Deep 18%</span>
+        <span><s style="background:var(--violet)"></s>REM 21%</span>
+        <span><s style="background:rgba(167,139,250,.35)"></s>Light 61%</span>
+      </div>
+    </div>
+    <p class="note">These are placeholder values, not tracker readings, and the stage split is a typical adult pattern rather than anything measured on you. Edit the fields to your real nights. At ~6.6 h average you are running a gap of several hours a week — that is the single biggest brake on a 6-day split in a deficit.</p>
+  </section>
+
+  <!-- ============ 7. SUPPLEMENTS ============ -->
+  <section class="card c4" aria-labelledby="h-su">
+    <div class="chead"><h2 id="h-su">Supplements</h2><span class="tag">3 confirmed</span></div>
+    <div id="supps"></div>
+    <p class="note">Only what you told me you actually take. Whey is convenience, not a requirement — 100 g paneer or 50 g dry soya does the same job for less money. Creatine at 3&ndash;5 g daily needs no loading phase and no specific timing; consistency is the whole trick. A multivitamin is insurance, not a diagnosis: if you want to act on B12, D3 or iron, get a blood test and let a doctor set the dose — iron especially should never be supplemented blind.</p>
+  </section>
+
+  <!-- ============ 9. INSIGHTS ============ -->
+  <div class="c8">
+    <div class="ins-wrap">
+      <div class="ins">
+        <div class="chead"><h2>Coach Forge reads your numbers</h2><span class="tag">week 1 · recomp</span></div>
+        <div class="ins-item">
+          <div class="ins-ic">🥩</div>
+          <div><div class="ins-h">Protein is the whole game, and your budget is the constraint</div>
+          <p class="ins-p">The plan lands at <b>150 g</b> against a 155 g target. Two whey scoops a day would make this easy and cost about <b>₹3,600/month</b> — over your ₹2,500. So the load sits on soya, paneer, dal and curd, and if a meal slips you lose 25&ndash;40 g fast. Below <b>137 g</b> at 85.4 kg in a 600 kcal deficit, you will lose scale weight and some of it will be arm and chest. Keep 50 g dry soya and 100 g paneer in the house as your two emergency levers.</p></div>
+        </div>
+        <div class="ins-item">
+          <div class="ins-ic">📉</div>
+          <div><div class="ins-h">Your deficit is correctly boring</div>
+          <p class="ins-p">You have come down from 87 to <b>85.4 kg</b>, so every number here has been rebuilt around the lighter you — 2,200 against an estimated 2,800 maintenance, which is <b>~0.55 kg per week</b>. Expect to redo this every 4&ndash;5 kg: a smaller body burns less, which is why plateaus arrive on a plan that never changed. Slow enough to keep strength climbing, which is the only reliable proof you are keeping muscle. This is also why I didn&rsquo;t touch your pre-workout bread and peanut butter: cutting 200 kcal from the meal that fuels your only training window is the worst 200 kcal to cut. If the scale hasn&rsquo;t moved across <b>three</b> weekly averages, drop 150 kcal or add a 20-minute walk — not both.</p></div>
+        </div>
+        <div class="ins-item">
+          <div class="ins-ic">🌙</div>
+          <div><div class="ins-h">Recovery is your bottleneck, not effort</div>
+          <p class="ins-p">You asked for 6 days and you clearly can train 6 days. But at <b>~6.6 h</b> average sleep, a 600 kcal deficit and a 10-to-7 desk job, the ceiling on this plan is recovery. That&rsquo;s why Thursday sits in the middle of the week rather than at the end, and why it now carries a walk, a stretch circuit and shoulder mobility instead of nothing — easy movement clears more soreness than sitting still does. Built-in rule: if you sleep under 6 h for three nights running, turn Sunday&rsquo;s Legs B into a 30-minute walk. That is the plan working, not you failing. And a 5:00 AM wake-up on a Legs day is a trade — take it knowingly.</p></div>
+        </div>
+        <div class="ins-item">
+          <div class="ins-ic">🕤</div>
+          <div><div class="ins-h">The 9:45 PM problem is solvable, and mostly already solved</div>
+          <p class="ins-p">Your whey on the way home already covers post-session protein — the &ldquo;anabolic window&rdquo; is hours wide, not minutes, so stop worrying about it. The real issue is a 10 PM dinner roughly two hours before bed. Keep dinner <b>protein and vegetable heavy, low in oil</b> (the soya sabji here is ~10 g fat on purpose) so it digests before you lie down. Your one genuinely useful tweak: a 200 ml milk and roasted chana snack near 11:15 PM costs 175 kcal and buys 10 g of slow protein across a 7-hour fast.</p></div>
+        </div>
+        <div class="ins-item">
+          <div class="ins-ic">📏</div>
+          <div><div class="ins-h">The love handles: no exercise reduces them</div>
+          <p class="ins-p">Side bends, twists and oblique work build the muscle underneath; they do not remove fat from above it. Waist fat goes when total body fat goes, and the flanks are usually one of the <b>last</b> areas to respond — expect visible change around weeks 8&ndash;12, not week 3. Stop weighing yourself for proof and measure your waist at the navel weekly instead. Target: under <b>90 cm</b> (half your height). The 1.6 kg already gone is mostly not from the flanks yet, and that is exactly what the research predicts. That number, your weekly weight average and your top set on incline press are the only three metrics worth tracking this block.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="foot">Physique OS is a planning tool, not medical or clinical advice. Calorie and macro figures are evidence-based estimates with real error bars, not measurements of your metabolism. Anything labelled demo or sample is placeholder data for you to overwrite. If you have a medical condition, are on medication, or pain persists or worsens, talk to a doctor or physiotherapist before following any of this. Your log syncs to your account and persists across devices; each new calendar day starts its own blank log.</p>
+
+</div>
+
+<script>
+"use strict";
+const RM = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString('en-IN');
+
+/* =======================================================
+   SUPABASE DATA LAYER
+   ======================================================= */
+const sb = window.supabase.createClient(
+  'https://tbrywdestdngctdjdosl.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicnl3ZGVzdGRuZ2N0ZGpkb3NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzNDI0ODUsImV4cCI6MjEwNDkxODQ4NX0.WhMXSsDbgcTEXK5snkxRM2zx2w6snjz9lVjT-KmNtjc'
+);
+let CURRENT_UID = null;
+let LIFT_TODAY = {};   // exercise name -> {w, r} logged today
+let LIFT_LAST  = {};   // exercise name -> {w, r, date} most recent prior session
+const dirty = { daily:false, weight:false };
+let liftRetryQueue = [];
+
+function todayISO(){
+  const d = new Date();
+  return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function debounce(fn, ms){
+  let t;
+  const wrapped = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+  wrapped.flush = (...a) => { clearTimeout(t); fn(...a); };
+  return wrapped;
+}
+function setStatus(state){
+  const chip = $('saveChip');
+  if(!chip) return;
+  if(state === 'saving') chip.textContent = 'Saving…';
+  else if(state === 'saved') chip.textContent = 'Saved';
+  else if(state === 'offline') chip.textContent = 'Offline — will retry';
+}
+
+function currentDailyPayload(){
+  return {
+    user_id: CURRENT_UID,
+    log_date: todayISO(),
+    water_l: +((S.water.filled * S.water.glass / 1000).toFixed(3)),
+    meals: S.meals.map(m => m.eaten),
+    supplements: S.supps.map(s => s.done),
+    sleep: { bed: $('bed').value, wake: $('wake').value, goal: S.sleep.goal, quality: $('slQual').value },
+    streak: parseInt($('streak').value, 10) || 0
+  };
+}
+async function tryPersistDaily(){
+  if(!CURRENT_UID) return;
+  setStatus('saving');
+  try{
+    const { error } = await sb.from('daily_logs').upsert(currentDailyPayload(), { onConflict: 'user_id,log_date' });
+    if(error) throw error;
+    dirty.daily = false;
+    setStatus('saved');
+  }catch(e){ dirty.daily = true; setStatus('offline'); }
+}
+const persist = debounce(tryPersistDaily, 500);
+
+async function tryPersistWeight(w){
+  if(!CURRENT_UID || isNaN(w)) return;
+  setStatus('saving');
+  try{
+    const { error } = await sb.from('weight_logs')
+      .upsert({ user_id: CURRENT_UID, log_date: todayISO(), weight_kg: w }, { onConflict: 'user_id,log_date' });
+    if(error) throw error;
+    dirty.weight = false;
+    setStatus('saved');
+  }catch(e){ dirty.weight = true; setStatus('offline'); }
+}
+const persistWeight = debounce(tryPersistWeight, 500);
+
+function lastLog(name){ return LIFT_LAST[name] || null; }
+function todayLog(day, name){ return LIFT_TODAY[name] || null; }
+async function saveLog(name, w, r){
+  LIFT_TODAY[name] = { w, r };
+  if(!CURRENT_UID) return;
+  setStatus('saving');
+  const row = { user_id: CURRENT_UID, log_date: todayISO(), exercise: name, weight_kg: w, reps: r };
+  try{
+    const { error } = await sb.from('lift_logs').insert(row);
+    if(error) throw error;
+    setStatus('saved');
+  }catch(e){ liftRetryQueue.push(row); setStatus('offline'); }
+}
+
+async function retryAll(){
+  let attempted = false;
+  if(dirty.daily){ attempted = true; await tryPersistDaily(); }
+  if(dirty.weight){ attempted = true; await tryPersistWeight(parseFloat($('todayW').value)); }
+  if(liftRetryQueue.length){
+    attempted = true;
+    const queue = liftRetryQueue; liftRetryQueue = [];
+    for(const row of queue){
+      try{ const { error } = await sb.from('lift_logs').insert(row); if(error) throw error; }
+      catch(e){ liftRetryQueue.push(row); }
+    }
+  }
+  if(attempted && !dirty.daily && !dirty.weight && !liftRetryQueue.length) setStatus('saved');
+}
+window.addEventListener('online', retryAll);
+setInterval(retryAll, 10000);
+
+async function loadAllFromSupabase(){
+  const today = todayISO();
+
+  try{
+    const { data, error } = await sb.from('daily_logs').select('*')
+      .eq('user_id', CURRENT_UID).eq('log_date', today).limit(1);
+    if(error) throw error;
+    const row = data && data[0];
+    if(row){
+      if(Array.isArray(row.meals)) row.meals.forEach((v,i) => { if(S.meals[i]) S.meals[i].eaten = !!v; });
+      if(Array.isArray(row.supplements)) row.supplements.forEach((v,i) => { if(S.supps[i]) S.supps[i].done = !!v; });
+      S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
+      if(row.sleep && typeof row.sleep === 'object'){
+        if(row.sleep.bed) $('bed').value = row.sleep.bed;
+        if(row.sleep.wake) $('wake').value = row.sleep.wake;
+        if(row.sleep.goal){ $('slGoal').value = row.sleep.goal; S.sleep.goal = row.sleep.goal; }
+        if(row.sleep.quality) $('slQual').value = row.sleep.quality;
+      }
+      if(row.streak != null) $('streak').value = row.streak;
+    } else {
+      S.meals.forEach(m => m.eaten = false);
+      S.supps.forEach(s => s.done = false);
+      S.water.filled = 0;
+    }
+  }catch(e){
+    console.warn('daily_logs load failed, using local defaults', e);
+    S.meals.forEach(m => m.eaten = false);
+    S.supps.forEach(s => s.done = false);
+    S.water.filled = 0;
+  }
+
+  try{
+    const { data, error } = await sb.from('weight_logs').select('log_date, weight_kg')
+      .eq('user_id', CURRENT_UID).order('log_date', { ascending:false }).limit(8);
+    if(error) throw error;
+    if(data && data.length){
+      const todayRow = data.find(r => r.log_date === today);
+      S.history = data.slice().reverse().map(r => +r.weight_kg);
+      S.start = S.history[0];
+      const weekAgo = data.find(r => (new Date(today) - new Date(r.log_date)) >= 6*864e5);
+      if(weekAgo) S.lastWeek = +weekAgo.weight_kg;
+      S.weight = todayRow ? +todayRow.weight_kg : +data[0].weight_kg;
+      $('todayW').value = todayRow ? todayRow.weight_kg : '';
+      $('wHistTag').textContent = 'your history';
+    }
+  }catch(e){ console.warn('weight_logs load failed, using sample history', e); }
+
+  try{
+    LIFT_TODAY = {}; LIFT_LAST = {};
+    const { data, error } = await sb.from('lift_logs')
+      .select('log_date, exercise, weight_kg, reps, created_at')
+      .eq('user_id', CURRENT_UID).order('created_at', { ascending:false }).limit(400);
+    if(error) throw error;
+    (data || []).forEach(row => {
+      if(row.log_date === today){
+        if(!LIFT_TODAY[row.exercise]) LIFT_TODAY[row.exercise] = { w:+row.weight_kg, r:row.reps };
+      } else if(!LIFT_LAST[row.exercise]){
+        LIFT_LAST[row.exercise] = { w:+row.weight_kg, r:row.reps, date: row.log_date };
+      }
+    });
+  }catch(e){ console.warn('lift_logs load failed', e); }
+}
+
+/* =======================================================
+   STATE
+   ======================================================= */
+const S = {
+  targets: {kcal:2200, p:155, c:245, f:68},
+  weight:85.4, start:89.5, goal:78, lastWeek:86.2,
+  history:[89.5, 89.2, 88.7, 88.3, 87.6, 87.0, 86.2, 85.4],  // sample weekly averages
+  water:{target:3.4, glass:250, filled:0},
+  sleep:{week:[6.2, 7.1, 5.8, 6.9, 7.4, 6.5, 6.67], goal:7.5},
+  meals:[
+    {n:"Breakfast", t:"7:45 AM",
+     f:"Oats 35 g cooked in 200 ml toned milk · paneer bhurji (100 g low-fat paneer, ½ tsp oil) · 1 banana",
+     k:550,p:30,c:61,fa:23,
+     prep:"Bhurji on Sunday for two days; oats in the microwave in 3 min.", eaten:false},
+    {n:"Lunch", t:"1:15 PM",
+     f:"2 chapati · 1 katori dal · soya keema (40 g dry soya, onion-tomato, 1 tsp oil) · 100 g sabji · 150 g curd · salad",
+     k:670,p:43,c:80,fa:19,
+     prep:"Carry the soya keema in your tiffin — it is the protein anchor of your day.", eaten:false},
+    {n:"Pre-workout", t:"7:30 PM",
+     f:"2 slices brown bread · 10 g peanut butter",
+     k:200,p:8,c:28,fa:7,
+     prep:"Your current habit, kept: 2 slices instead of 1–1.5, an hour before lifting. Portion and timing are right — peanut butter trimmed to 10 g so fat doesn't sit heavy.", eaten:false},
+    {n:"Post-workout", t:"9:20 PM",
+     f:"1 scoop whey (30 g) in 300 ml water",
+     k:120,p:24,c:2,fa:2,
+     prep:"Shake it at the gym or in the auto home. No rush — the window is hours wide.", eaten:false},
+    {n:"Dinner", t:"10:00 PM",
+     f:"2 chapati · soya chunk sabji (50 g dry soya, 1 tsp oil) · 100 g mixed sabji · salad",
+     k:465,p:35,c:61,fa:10,
+     prep:"Soak the soya before you leave for the gym; sabji is 8 minutes when you walk in.", eaten:false},
+    {n:"Before bed", t:"11:15 PM",
+     f:"200 ml toned milk · 15 g roasted chana",
+     k:175,p:10,c:19,fa:8,
+     prep:"Optional but useful — 12 g of slow protein across your overnight fast.", eaten:false}
+  ],
+  supps:[
+    {t:"7:45 AM", n:"Multivitamin", d:"1 tablet with breakfast",
+     p:"Take it with food — fat-soluble vitamins need it. Insurance, not a substitute for a blood test.", done:false},
+    {t:"7:30 PM", n:"Creatine monohydrate", d:"5 g in water",
+     p:"Any time of day works; daily consistency is what matters. No loading needed. Check with a doctor first if you have kidney concerns.", done:false},
+    {t:"9:20 PM", n:"Whey protein", d:"1 scoop (~24 g protein)",
+     p:"Post-workout, in water. Convenience — paneer or soya covers the same need.", done:false}
+  ]
+};
+
+/* =======================================================
+   TRAINING SPLIT
+   ======================================================= */
+const DAYS = [
+ {k:"mon", lbl:"Mon · Push A",   name:"Mon · Push A — chest, shoulders, triceps"},
+ {k:"tue", lbl:"Tue · Pull A",   name:"Tue · Pull A — back, biceps"},
+ {k:"wed", lbl:"Wed · Legs A",   name:"Wed · Legs A — quads, glutes, core"},
+ {k:"thu", lbl:"Thu · Recovery", name:"Thu · Active recovery — walk, stretch, mobility"},
+ {k:"fri", lbl:"Fri · Push B",   name:"Fri · Push B — shoulders, upper chest"},
+ {k:"sat", lbl:"Sat · Pull B",   name:"Sat · Pull B — back width, rear delts, arms"},
+ {k:"sun", lbl:"Sun · Legs B",   name:"Sun · Legs B — hamstrings, glutes, core"}
+];
+const DOW = ['sun','mon','tue','wed','thu','fri','sat'];
+
+const WORKOUTS = {
+mon:[
+ {n:"Incline dumbbell press",a:"incline",s:"4 × 8–10",l:"leave 2–3 reps in reserve",r:"90 s",
+  m:["Upper chest","Front delts","Triceps"],cue:"Elbows about 45° from your ribs, not flared to 90°. Press slightly back, over your eyes.",
+  alt:"Shoulder-friendlier: machine incline press — same angle, fixed path, no stabilising load."},
+ {n:"Flat barbell or machine chest press",a:"bench",s:"3 × 8–10",l:"leave 2 reps in reserve",r:"90 s",
+  m:["Mid chest","Triceps"],cue:"Shoulder blades pinned back and down for the whole set — never let them roll forward.",
+  alt:"Shoulder-friendlier: neutral-grip machine press if the straight bar pinches at the bottom."},
+ {n:"Seated neutral-grip dumbbell press",a:"ohp",s:"3 × 10–12",l:"leave 3 reps in reserve",r:"75 s",
+  m:["Front delts","Side delts","Triceps"],cue:"Palms facing each other, stop just short of lockout, no lower-back arch.",
+  alt:"Shoulder-friendlier: landmine press or 45° low-incline press — half the shoulder rotation."},
+ {n:"Cable lateral raise",a:"lateral",s:"3 × 12–15",l:"light — the first rep should feel easy",r:"60 s",
+  m:["Side delts"],cue:"Lead with the elbow, thumb turned slightly down, and don't let the shrug take over.",
+  alt:"Replaces upright rows entirely — those are the classic shoulder aggravator."},
+ {n:"Cable triceps pushdown",a:"pushdown",s:"3 × 12–15",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Triceps — lateral head"],cue:"Elbows glued to your sides. Only the forearm moves.",alt:""},
+ {n:"Overhead rope extension",a:"ohext",s:"2 × 12–15",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Triceps — long head"],cue:"Feel the stretch at the bottom, keep ribs down rather than flaring them.",
+  alt:"Shoulder-friendlier: cross-body kickback if the overhead position feels tight tonight."},
+ {n:"Plank",a:"plank",s:"3 × 40–50 s",l:"bodyweight",r:"45 s",
+  m:["Deep core","Abs"],cue:"Squeeze glutes, tuck ribs toward hips. End the set when the hips sag, not when the clock says so.",alt:""},
+ {n:"Incline treadmill walk",a:"walk",s:"12 min",l:"4.5–5 km/h at 8–10% incline",r:"—",
+  m:["Conditioning"],cue:"Nose-breathing pace — you should still be able to hold a conversation.",alt:""}
+],
+tue:[
+ {n:"Lat pulldown",a:"pulldown",s:"4 × 8–10",l:"leave 2–3 reps in reserve",r:"90 s",
+  m:["Lats","Biceps"],cue:"Pull your elbows to your ribs, not the bar to your chin.",alt:""},
+ {n:"Seated cable row",a:"row",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"90 s",
+  m:["Mid back","Rhomboids"],cue:"Squeeze for a full second at the back, and stop rocking your torso.",alt:""},
+ {n:"Chest-supported dumbbell row",a:"row",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"75 s",
+  m:["Upper back","Lats"],cue:"Chest stays on the pad — that's the whole point of the variation.",alt:""},
+ {n:"Face pull",a:"row",s:"3 × 15",l:"light and controlled",r:"60 s",
+  m:["Rear delts","Rotator cuff"],cue:"Pull to your forehead, thumbs back. Best insurance you have for that shoulder.",alt:""},
+ {n:"Dumbbell biceps curl",a:"curl",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Biceps"],cue:"Elbows still, no swing. Lower slower than you lift.",alt:""},
+ {n:"Hammer curl",a:"curl",s:"2 × 12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Brachialis","Forearms"],cue:"Neutral grip throughout — this is what adds arm width.",alt:""}
+],
+wed:[
+ {n:"Barbell or goblet squat",a:"squat",s:"4 × 8",l:"leave 2–3 reps in reserve",r:"2 min",
+  m:["Quads","Glutes"],cue:"Knees track over mid-foot, depth only as far as your back stays neutral.",alt:""},
+ {n:"Leg press",a:"squat",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"90 s",
+  m:["Quads","Glutes"],cue:"Don't let your hips curl off the pad at the bottom.",alt:""},
+ {n:"Romanian deadlift",a:"rdl",s:"3 × 10",l:"leave 3 reps in reserve",r:"90 s",
+  m:["Hamstrings","Glutes"],cue:"Push your hips back, bar grazing your thighs. Hinge, don't squat.",alt:""},
+ {n:"Seated leg curl",a:"rdl",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Hamstrings"],cue:"Control the way back up — that's where hamstrings actually grow.",alt:""},
+ {n:"Standing calf raise",a:"walk",s:"3 × 15",l:"leave 2 reps in reserve",r:"45 s",
+  m:["Calves"],cue:"Full pause at the top, full stretch at the bottom.",alt:""},
+ {n:"Plank",a:"plank",s:"3 × 45 s",l:"bodyweight",r:"45 s",
+  m:["Core"],cue:"Brace as if someone's about to push you sideways.",alt:""}
+],
+thu:[
+ {n:"Easy walk",a:"walk",s:"35–45 min",l:"conversational pace — you could hold a phone call",r:"—",
+  m:["Blood flow","Recovery","Fat loss"],cue:"Outdoors if you can, after dinner or before work. This is not a cardio session in disguise — if you are breathing hard, slow down.",
+  alt:"Split it: 20 min in the morning, 20 min after work. Same benefit."},
+ {n:"Full-body stretch circuit",a:"fold",s:"2 rounds · 30–45 s per hold",l:"stretch to mild tension, never to pain",r:"no rest needed",
+  m:["Hamstrings","Hip flexors","Quads","Chest","Lats"],
+  cue:"Six holds: standing hamstring fold, half-kneeling hip flexor, standing quad, doorway chest stretch, overhead lat side-bend, seated figure-4 glute. Breathe out as you settle deeper — no bouncing.",
+  alt:"Hamstrings and hip flexors matter most after a week of desk work and squats. If you only have six minutes, do those two."},
+ {n:"Shoulder mobility circuit",a:"circles",s:"2 rounds · 10–12 reps each",l:"bodyweight or a light band",r:"no rest needed",
+  m:["Shoulders","Rotator cuff","Thoracic spine"],
+  cue:"Slow arm circles both directions, band pull-aparts, wall slides, then 10 open-books lying on your side. This is the maintenance work that keeps your shoulder quiet through a pressing block.",
+  alt:"Nothing here should pinch. If a movement catches, shrink the range until it doesn't — don't push through it."},
+ {n:"Dead bug or light plank",a:"plank",s:"2 × 30–40 s",l:"optional, easy effort",r:"45 s",
+  m:["Deep core"],cue:"Optional. Breathe normally the whole time — if you are straining, skip it and keep the day genuinely easy.",
+  alt:"On a bad-sleep week, drop this and the mobility circuit. The walk alone is the day doing its job."}
+],
+fri:[
+ {n:"Seated machine shoulder press",a:"ohp",s:"3 × 10",l:"leave 2–3 reps in reserve",r:"90 s",
+  m:["Front delts","Triceps"],cue:"Fixed path, so push effort a little harder than with free weights.",
+  alt:"Shoulder-friendlier: stop at eyebrow height if the top feels tight."},
+ {n:"Incline dumbbell press",a:"incline",s:"3 × 10",l:"leave 2 reps in reserve",r:"90 s",
+  m:["Upper chest","Front delts"],cue:"Lower under control — the stretch is the stimulus.",alt:""},
+ {n:"Cable fly or pec deck",a:"bench",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Chest"],cue:"Think of hugging a barrel; elbows stay slightly bent.",alt:""},
+ {n:"Dumbbell lateral raise",a:"lateral",s:"4 × 12–15",l:"light",r:"60 s",
+  m:["Side delts"],cue:"Four sets on purpose — side delts are what make your waist look narrower.",alt:""},
+ {n:"Overhead rope extension",a:"ohext",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Triceps — long head"],cue:"Elbows point forward, not out.",alt:""},
+ {n:"Cable pushdown",a:"pushdown",s:"2 × 15",l:"finisher",r:"45 s",
+  m:["Triceps"],cue:"Last two sets of the night — chase the burn, not the weight.",alt:""}
+],
+sat:[
+ {n:"Neutral-grip lat pulldown",a:"pulldown",s:"4 × 10",l:"leave 2 reps in reserve",r:"90 s",
+  m:["Lats","Biceps"],cue:"Lean back about 15° and pull to your upper chest.",alt:""},
+ {n:"Single-arm cable row",a:"row",s:"3 × 12 each",l:"leave 2 reps in reserve",r:"75 s",
+  m:["Lats","Mid back"],cue:"Let the shoulder blade travel forward at the start for the full stretch.",alt:""},
+ {n:"Rear-delt cable fly",a:"lateral",s:"3 × 15",l:"light",r:"60 s",
+  m:["Rear delts"],cue:"Rear delts balance all your pressing. Don't rush these.",alt:""},
+ {n:"Incline dumbbell curl",a:"curl",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Biceps — long head"],cue:"Arms hang behind your body; that stretch is the whole exercise.",alt:""},
+ {n:"Cable curl",a:"curl",s:"2 × 15",l:"finisher",r:"45 s",
+  m:["Biceps"],cue:"Constant tension, no rest at the bottom.",alt:""},
+ {n:"Treadmill walk",a:"walk",s:"15 min",l:"5 km/h, 6–8% incline",r:"—",
+  m:["Conditioning"],cue:"Easy finish to the week.",alt:""}
+],
+sun:[
+ {n:"Romanian deadlift",a:"rdl",s:"4 × 8",l:"leave 2–3 reps in reserve",r:"2 min",
+  m:["Hamstrings","Glutes","Back"],cue:"Hips back, spine neutral, stop when the hamstrings run out of stretch.",alt:""},
+ {n:"Bulgarian split squat",a:"squat",s:"3 × 10 each",l:"bodyweight or light dumbbells",r:"90 s",
+  m:["Quads","Glutes"],cue:"Front shin near vertical. Humbling by rep 8 — that's normal.",alt:""},
+ {n:"Leg extension",a:"squat",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Quads"],cue:"One second squeeze at the top.",alt:""},
+ {n:"Seated leg curl",a:"rdl",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
+  m:["Hamstrings"],cue:"Slow negatives.",alt:""},
+ {n:"Hanging knee raise",a:"plank",s:"3 × 12",l:"bodyweight",r:"60 s",
+  m:["Abs","Hip flexors"],cue:"Curl your pelvis up rather than just swinging your legs.",alt:""},
+ {n:"Incline walk",a:"walk",s:"15 min",l:"4.5–5 km/h, 8–10%",r:"—",
+  m:["Conditioning"],cue:"Weekend session, so no rush — enjoy it.",alt:""}
+]
+};
+
+/* =======================================================
+   STICK-FIGURE ANIMATION ENGINE
+   Angles in degrees, clockwise-positive. A downward limb at 0°
+   hangs straight down; -90° points forward (+x).
+   ======================================================= */
+const P = {hipX:120, hipY:112, shY:62, elbY:86, handY:108, kneeY:154, ankY:192};
+
+const ANIMS = {
+  squat:   {view:'side', imp:'barShoulder', bg:'floor', dur:2.6,
+            a:{tor:8, ua:118, fa:-46, th:0, sh:0},
+            b:{hx:-6, hy:34, tor:24, ua:118, fa:-46, th:-46, sh:101}},
+  bench:   {view:'side', imp:'bar', bg:'flat', dur:2.4,
+            a:{hx:-25, hy:24, tor:75, ua:45, fa:55, th:-55, sh:65},
+            b:{hx:-25, hy:24, tor:75, ua:93, fa:0,  th:-55, sh:65}},
+  incline: {view:'side', imp:'db', bg:'incline', dur:2.4,
+            a:{hx:-15, hy:20, tor:58, ua:47, fa:55, th:-50, sh:65},
+            b:{hx:-15, hy:20, tor:58, ua:92, fa:0,  th:-50, sh:65}},
+  ohp:     {view:'side', imp:'db', bg:'seat', dur:2.4,
+            a:{hy:36, tor:0, ua:-75,  fa:-105, th:-90, sh:90},
+            b:{hy:36, tor:0, ua:-180, fa:0,    th:-90, sh:90}},
+  lateral: {view:'front', imp:'db', bg:'floor', dur:2.2,
+            a:{tor:0, ua:6,   fa:0,  th:0, sh:0},
+            b:{tor:0, ua:-85, fa:-3, th:0, sh:0}},
+  pushdown:{view:'side', imp:'handle', bg:'pulley', dur:1.8,
+            a:{tor:6, ua:2, fa:-103, th:0, sh:0},
+            b:{tor:6, ua:2, fa:-13,  th:0, sh:0}},
+  ohext:   {view:'side', imp:'db', bg:'seat', dur:2.2,
+            a:{hy:36, tor:0, ua:-175, fa:-105, th:-90, sh:90},
+            b:{hy:36, tor:0, ua:-175, fa:0,    th:-90, sh:90}},
+  plank:   {view:'side', imp:'none', bg:'floor', dur:3.6,
+            a:{hx:6, hy:46, tor:95, ua:-95, fa:-92, th:90, sh:2},
+            b:{hx:6, hy:50, tor:99, ua:-99, fa:-88, th:94, sh:2}},
+  walk:    {view:'side', imp:'none', bg:'belt', dur:1.1, two:'delay',
+            a:{tor:4, ua:-28, fa:-18, th:-26, sh:-8},
+            b:{tor:4, ua:22,  fa:-8,  th:22,  sh:-42}},
+  pulldown:{view:'side', imp:'bar', bg:'pulley', dur:2.4,
+            a:{hy:36, tor:-5,  ua:-165, fa:0,    th:-90, sh:90},
+            b:{hy:36, tor:-12, ua:-13,  fa:-140, th:-90, sh:90}},
+  row:     {view:'side', imp:'handle', bg:'seatflat', dur:2.4,
+            a:{hy:36, tor:8,  ua:-88, fa:-15,  th:-90, sh:90},
+            b:{hy:36, tor:-8, ua:53,  fa:-130, th:-90, sh:90}},
+  curl:    {view:'side', imp:'db', bg:'floor', dur:2.0,
+            a:{tor:2, ua:4, fa:-11,  th:0, sh:0},
+            b:{tor:2, ua:4, fa:-156, th:0, sh:0}},
+  fold:    {view:'side', imp:'none', bg:'floor', dur:5.0,
+            a:{tor:5,  ua:-5,  fa:0, th:0,  sh:0},
+            b:{tor:98, ua:-98, fa:0, th:-4, sh:9}},
+  circles: {view:'front', imp:'none', bg:'floor', dur:3.0, spin:true,
+            a:{tor:0, ua:0, fa:0, th:0, sh:0},
+            b:{tor:0, ua:0, fa:0, th:0, sh:0}},
+  rdl:     {view:'side', imp:'bar', bg:'floor', dur:2.6,
+            a:{tor:5,  ua:-5,  fa:0, th:0,   sh:0},
+            b:{hy:-4, tor:76, ua:-76, fa:0, th:-10, sh:12}}
+};
+
+const pose = o => Object.assign({hx:0,hy:0,tor:0,ua:0,fa:0,th:0,sh:0}, o||{});
+
+function implementSVG(kind, hx, hy){
+  const y = P.handY;
+  switch(kind){
+    case 'db':     return `<rect class="imp" x="${hx-11}" y="${y-5}" width="22" height="10" rx="5"/>`;
+    case 'bar':    return `<line class="imp-l" x1="${hx-34}" y1="${y}" x2="${hx+34}" y2="${y}"/>
+                           <rect class="imp" x="${hx-38}" y="${y-8}" width="6" height="16" rx="3"/>
+                           <rect class="imp" x="${hx+32}" y="${y-8}" width="6" height="16" rx="3"/>`;
+    case 'handle': return `<rect class="imp" x="${hx-7}" y="${y-6}" width="14" height="12" rx="4"/>`;
+    default:       return '';
+  }
+}
+
+function bgSVG(kind){
+  const floor = `<line class="floor" x1="8" y1="200" x2="232" y2="200"/>`;
+  switch(kind){
+    case 'flat':
+      return `<g class="gear"><rect class="gearf" x="48" y="136" width="140" height="10" rx="5"/>
+              <path d="M60 146 L54 200 M176 146 L182 200"/></g>${floor}`;
+    case 'incline':
+      return `<g class="gear" transform="rotate(-30 120 140)"><rect class="gearf" x="52" y="136" width="138" height="10" rx="5"/></g>
+              <g class="gear"><path d="M70 168 L62 200 M168 120 L182 200"/></g>${floor}`;
+    case 'seat':
+      return `<g class="gear"><rect class="gearf" x="112" y="150" width="74" height="10" rx="5"/>
+              <rect class="gearf" x="100" y="88" width="11" height="66" rx="5"/>
+              <path d="M122 160 L116 200 M176 160 L182 200"/></g>${floor}`;
+    case 'seatflat':
+      return `<g class="gear"><rect class="gearf" x="98" y="150" width="80" height="10" rx="5"/>
+              <path d="M108 160 L102 200 M168 160 L174 200"/></g>${floor}`;
+    case 'pulley':
+      return `<g class="gear"><path d="M206 16 L206 200"/><path d="M186 16 L214 16"/>
+              <circle cx="206" cy="26" r="6" class="gearf"/></g>
+              <line class="imp-l" x1="206" y1="26" x2="206" y2="60" opacity=".55"/>${floor}`;
+    case 'belt':
+      return `<g class="gear"><rect class="gearf" x="34" y="188" width="176" height="12" rx="6"/>
+              <path d="M196 188 L196 120 M182 120 L210 120"/></g>
+              <line class="belt" x1="42" y1="194" x2="202" y2="194"/>`;
+    default:
+      return floor;
+  }
+}
+
+function armSVG(sx, cls){
+  return `<g class="${cls.ua}" style="transform-origin:${sx}px ${P.shY}px;transform:rotate(${cls.uaRot}deg)">
+    <line class="limb" x1="${sx}" y1="${P.shY}" x2="${sx}" y2="${P.elbY}"/>
+    <g class="${cls.fa}" style="transform-origin:${sx}px ${P.elbY}px;transform:rotate(${cls.faRot}deg)">
+      <line class="limb" x1="${sx}" y1="${P.elbY}" x2="${sx}" y2="${P.handY}"/>
+      ${cls.imp}
+    </g></g>`;
+}
+function legSVG(lx, cls){
+  return `<g class="${cls.th}" style="transform-origin:${lx}px ${P.hipY}px;transform:rotate(${cls.thRot}deg)">
+    <line class="limb" x1="${lx}" y1="${P.hipY}" x2="${lx}" y2="${P.kneeY}"/>
+    <g class="${cls.sh}" style="transform-origin:${lx}px ${P.kneeY}px;transform:rotate(${cls.shRot}deg)">
+      <line class="limb" x1="${lx}" y1="${P.kneeY}" x2="${lx}" y2="${P.ankY}"/>
+      <line class="limb" x1="${lx}" y1="${P.ankY}" x2="${lx+13}" y2="${P.ankY}"/>
+    </g></g>`;
+}
+
+function kf(name, prop, from, to){
+  return `@keyframes ${name}{0%,100%{transform:${prop}(${from})}50%{transform:${prop}(${to})}}`;
+}
+
+function renderFigure(key){
+  const cfg = ANIMS[key] || ANIMS.plank;
+  const A = pose(cfg.a), B = pose(cfg.b);
+  const front = cfg.view === 'front';
+  const sxR = front ? 136 : P.hipX, sxL = front ? 104 : P.hipX;
+  const lxR = front ? 130 : P.hipX, lxL = front ? 110 : P.hipX;
+  const imp = implementSVG(cfg.imp, front ? sxR : P.hipX);
+
+  // torso group holds head, spine, arms and any shoulder-borne implement
+  const shoulderBar = cfg.imp === 'barShoulder'
+    ? `<line class="imp-l" x1="${P.hipX-30}" y1="${P.shY}" x2="${P.hipX+30}" y2="${P.shY}"/>` : '';
+  const shoulderLine = front
+    ? `<line class="limb" x1="${sxL}" y1="${P.shY}" x2="${sxR}" y2="${P.shY}"/>` : '';
+  const pelvisLine = front
+    ? `<line class="limb" x1="${lxL}" y1="${P.hipY}" x2="${lxR}" y2="${P.hipY}"/>` : '';
+
+  let arms = armSVG(sxR, {ua:'p-ua', fa:'p-fa', imp:imp, uaRot:B.ua, faRot:B.fa});
+  let legs = legSVG(lxR, {th:'p-th', sh:'p-sh', thRot:B.th, shRot:B.sh});
+  if(front){
+    arms += armSVG(sxL, {ua:'p-ua2', fa:'p-fa2', imp:implementSVG(cfg.imp, sxL), uaRot:-B.ua, faRot:-B.fa});
+    legs += legSVG(lxL, {th:'p-th2', sh:'p-sh2', thRot:-B.th, shRot:-B.sh});
+  } else if(cfg.two === 'delay'){
+    arms += armSVG(sxR, {ua:'p-ua2', fa:'p-fa2', imp:'', uaRot:A.ua, faRot:A.fa});
+    legs += legSVG(lxR, {th:'p-th2', sh:'p-sh2', thRot:A.th, shRot:A.sh});
+  }
+
+  $('figbg').innerHTML = bgSVG(cfg.bg);
+  $('figbody').innerHTML =
+    `<g class="p-r" style="transform:translate(${B.hx}px,${B.hy}px)">
+       ${legs}
+       <g class="p-t" style="transform-origin:${P.hipX}px ${P.hipY}px;transform:rotate(${B.tor}deg)">
+         <line class="limb" x1="${P.hipX}" y1="${P.hipY}" x2="${P.hipX}" y2="${P.shY}"/>
+         ${shoulderLine}${shoulderBar}
+         <circle class="head" cx="${P.hipX}" cy="${P.shY-13}" r="11"/>
+         ${arms}
+       </g>
+       ${pelvisLine}
+     </g>`;
+
+  // regenerate keyframes for this movement only
+  const d = cfg.dur, e = 'cubic-bezier(.45,.05,.55,.95)';
+  const rot = (c,f,t) => `.${c}{animation:k-${c} ${d}s ${e} infinite}` + kf(`k-${c}`,'rotate',f+'deg',t+'deg');
+  let css = `.p-r{animation:k-root ${d}s ${e} infinite}`
+    + `@keyframes k-root{0%,100%{transform:translate(${A.hx}px,${A.hy}px)}50%{transform:translate(${B.hx}px,${B.hy}px)}}`
+    + rot('p-t', A.tor, B.tor)
+    + rot('p-ua', A.ua, B.ua) + rot('p-fa', A.fa, B.fa)
+    + rot('p-th', A.th, B.th) + rot('p-sh', A.sh, B.sh);
+
+  if(front){
+    css += rot('p-ua2', -A.ua, -B.ua) + rot('p-fa2', -A.fa, -B.fa)
+         + rot('p-th2', -A.th, -B.th) + rot('p-sh2', -A.sh, -B.sh);
+  } else if(cfg.two === 'delay'){
+    const dl = `animation-delay:-${(d/2).toFixed(2)}s`;
+    css += `.p-ua2{animation:k-p-ua ${d}s ${e} infinite;${dl}}`
+         + `.p-fa2{animation:k-p-fa ${d}s ${e} infinite;${dl}}`
+         + `.p-th2{animation:k-p-th ${d}s ${e} infinite;${dl}}`
+         + `.p-sh2{animation:k-p-sh ${d}s ${e} infinite;${dl}}`;
+  }
+  if(cfg.spin){
+    css += `.p-ua{animation:k-spin ${d}s linear infinite}`
+         + `@keyframes k-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`
+         + `.p-fa{animation:none}`;
+    if(front) css += `.p-ua2{animation:k-spin2 ${d}s linear infinite}`
+         + `@keyframes k-spin2{from{transform:rotate(0deg)}to{transform:rotate(-360deg)}}`
+         + `.p-fa2{animation:none}`;
+  }
+  // inline transforms above hold the mid-rep pose, so reduced motion shows a readable still
+  $('figStyle').textContent = RM ? '' : css;
+}
+
+/* =======================================================
+   SESSION CARD
+   ======================================================= */
+let curDay = 'mon';   // the block starts Monday
+let curEx = 0;
+const doneMap = {};
+
+function buildDays(){
+  const todayK = DOW[new Date().getDay()];
+  $('days').innerHTML = DAYS.map(d =>
+    `<button class="day${d.k===todayK?' today':''}" data-day="${d.k}" aria-pressed="${d.k===curDay}">${d.lbl}</button>`).join('');
+  $('days').querySelectorAll('.day').forEach(b => b.addEventListener('click', () => {
+    curDay = b.dataset.day; curEx = 0; buildDays(); buildExercises();
+  }));
+}
+
+function buildExercises(){
+  const list = WORKOUTS[curDay];
+  doneMap[curDay] = doneMap[curDay] || list.map(() => false);
+  const done = doneMap[curDay];
+  $('exlist').innerHTML = list.map((x,i) => {
+    const last = lastLog(x.n);
+    const cur = todayLog(curDay, x.n);
+    return `
+    <div class="ex${done[i]?' done':''}" aria-current="${i===curEx}">
+      <button class="tick" aria-pressed="${done[i]}" data-tick="${i}" aria-label="Mark ${x.n} done">✓</button>
+      <div class="exmain">
+        <button style="background:none;border:none;padding:0;font:inherit;text-align:left;width:100%" data-pick="${i}">
+          <div class="exname">${x.n}</div>
+          <div class="exmeta">${x.s} &middot; <em>${x.l}</em> &middot; rest ${x.r}</div>
+          <div class="exmeta" style="color:var(--dim2)">${x.m.join(' · ')}</div>
+          ${x.alt?`<div class="exalt">↳ ${x.alt}</div>`:''}
+        </button>
+        ${last?`<div class="exalt" style="color:var(--gold)">Last time: ${last.w} kg × ${last.r}${last.date?` (${last.date})`:''}</div>`:''}
+        <div class="logrow">
+          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${cur?cur.w:''}" data-logw="${i}" aria-label="Weight used for ${x.n} in kg">
+          <span class="logx">×</span>
+          <input type="number" class="loginp" placeholder="reps" step="1" min="0" value="${cur?cur.r:''}" data-logr="${i}" aria-label="Reps completed for ${x.n}">
+          <span class="logsaved" data-logsaved="${i}">${cur?'✓ logged':''}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  $('exlist').querySelectorAll('[data-pick]').forEach(b =>
+    b.addEventListener('click', () => { curEx = +b.dataset.pick; buildExercises(); }));
+  $('exlist').querySelectorAll('[data-tick]').forEach(b =>
+    b.addEventListener('click', () => { const i = +b.dataset.tick; done[i] = !done[i]; buildExercises(); }));
+  $('exlist').querySelectorAll('[data-logw],[data-logr]').forEach(inp =>
+    inp.addEventListener('change', () => {
+      const i = +(inp.dataset.logw ?? inp.dataset.logr);
+      const row = list[i];
+      const wEl = $('exlist').querySelector(`[data-logw="${i}"]`);
+      const rEl = $('exlist').querySelector(`[data-logr="${i}"]`);
+      const w = parseFloat(wEl.value), r = parseInt(rEl.value, 10);
+      if(!isNaN(w) && !isNaN(r) && w > 0 && r > 0){
+        saveLog(row.n, w, r);
+        const tag = $('exlist').querySelector(`[data-logsaved="${i}"]`);
+        if(tag) tag.textContent = '✓ logged';
+        persist();
+      }
+    }));
+
+  const x = list[curEx];
+  $('stageName').textContent = x.n;
+  $('stageTags').innerHTML = x.m.map(m => `<span>${m}</span>`).join('');
+  $('stageCue').textContent = x.cue;
+  $('stageAlt').textContent = x.alt || '';
+  renderFigure(x.a);
+  $('exProgress').textContent = `${done.filter(Boolean).length} of ${list.length} done`;
+  const dayObj = DAYS.find(d => d.k === curDay);
+  $('sessTag').textContent = dayObj.name;
+  $('sessChip').textContent = dayObj.name;
+}
+
+/* =======================================================
+   MEALS · CALORIES · MACROS
+   ======================================================= */
+function buildMeals(){
+  $('meals').innerHTML = S.meals.map((m,i) => `
+    <div class="meal${m.eaten?' eaten':''}">
+      <button class="tick" aria-pressed="${m.eaten}" data-meal="${i}" aria-label="Mark ${m.n} as eaten">✓</button>
+      <div class="meal-b">
+        <div class="meal-h"><span class="meal-n">${m.n}</span><span class="meal-t">${m.t}</span></div>
+        <div class="meal-f">${m.f}</div>
+        <div class="mac">
+          <span class="k">${m.k} kcal</span><span class="pr">P ${m.p} g</span>
+          <span>C ${m.c} g</span><span>F ${m.fa} g</span>
+        </div>
+        ${m.prep?`<div class="meal-p">${m.prep}</div>`:''}
+      </div>
+    </div>`).join('');
+  $('meals').querySelectorAll('[data-meal]').forEach(b =>
+    b.addEventListener('click', () => { const i=+b.dataset.meal; S.meals[i].eaten=!S.meals[i].eaten; buildMeals(); recalc(); persist(); }));
+}
+
+const RING_C = 477.5;
+function recalc(){
+  const t = S.meals.filter(m => m.eaten)
+    .reduce((a,m) => ({k:a.k+m.k, p:a.p+m.p, c:a.c+m.c, f:a.f+m.fa}), {k:0,p:0,c:0,f:0});
+  const T = S.targets;
+
+  $('kEaten').textContent = fmt(t.k);
+  const left = T.kcal - t.k;
+  $('kLeft').textContent = left >= 0 ? fmt(left) : '+' + fmt(-left) + ' over';
+  $('kLeft').style.color = left >= 0 ? '' : '#F87171';
+  $('ring').style.strokeDashoffset = RING_C * (1 - Math.min(t.k/T.kcal, 1));
+
+  const set = (key, eaten, target, unit) => {
+    const pct = Math.min(eaten/target*100, 100);
+    $(key+'Eat').textContent = Math.round(eaten);
+    $(key+'Bar').style.width = pct + '%';
+    $(key+'Pct').textContent = Math.round(eaten/target*100) + '%';
+    const rem = target - eaten;
+    $(key+'Left').textContent = rem > 0 ? `${Math.round(rem)} ${unit} to go` : `${Math.round(-rem)} ${unit} over`;
+  };
+  set('p', t.p, T.p, 'g'); set('c', t.c, T.c, 'g'); set('f', t.f, T.f, 'g');
+}
+
+/* =======================================================
+   WATER
+   ======================================================= */
+function buildGlasses(){
+  const n = Math.max(1, Math.round(S.water.target * 1000 / S.water.glass));
+  if(S.water.filled > n) S.water.filled = n;
+  $('glasses').innerHTML = Array.from({length:n}, (_,i) =>
+    `<button class="glass" data-g="${i}" aria-pressed="${i < S.water.filled}"
+       aria-label="Glass ${i+1} of ${n}"><i></i></button>`).join('');
+  $('glasses').querySelectorAll('.glass').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.g;
+    S.water.filled = (i + 1 === S.water.filled) ? i : i + 1;
+    buildGlasses(); paintWater(); persist();
+  }));
+  paintWater();
+}
+function paintWater(){
+  const lit = S.water.filled * S.water.glass / 1000;
+  $('wLit').textContent = lit.toFixed(2).replace(/0$/,'');
+  $('wTgt').textContent = S.water.target;
+  const pct = Math.min(lit / S.water.target * 100, 100);
+  $('wPct').textContent = Math.round(lit / S.water.target * 100) + '%';
+  $('wBar2').style.width = pct + '%';
+}
+$('wTargetIn').addEventListener('input', e => {
+  const v = parseFloat(e.target.value); if(!isNaN(v) && v > 0){ S.water.target = v; buildGlasses(); }
+});
+$('wGlassIn').addEventListener('input', e => {
+  const v = parseInt(e.target.value,10); if(!isNaN(v) && v >= 100){ S.water.glass = v; buildGlasses(); }
+});
+
+/* =======================================================
+   SUPPLEMENTS
+   ======================================================= */
+function buildSupps(){
+  $('supps').innerHTML = S.supps.map((s,i) => `
+    <div class="supp${s.done?' done':''}">
+      <span class="supp-t">${s.t}</span>
+      <div class="supp-b">
+        <div class="supp-n">${s.n}</div>
+        <div class="supp-d">${s.d}</div>
+        <div class="supp-d" style="color:var(--dim2)">${s.p}</div>
+      </div>
+      <button class="tick" aria-pressed="${s.done}" data-supp="${i}" aria-label="Mark ${s.n} taken">✓</button>
+    </div>`).join('');
+  $('supps').querySelectorAll('[data-supp]').forEach(b =>
+    b.addEventListener('click', () => { const i=+b.dataset.supp; S.supps[i].done=!S.supps[i].done; buildSupps(); persist(); }));
+}
+
+/* =======================================================
+   WEIGHT · SPARKLINE
+   ======================================================= */
+function paintWeight(){
+  const bmi = S.weight / Math.pow(1.80, 2);
+  $('bmi').textContent = bmi.toFixed(1);
+  $('goalLbl').textContent = 'Goal ' + S.goal + ' kg';
+  const span = S.start - S.goal;
+  const pct = span > 0 ? Math.max(0, Math.min((S.start - S.weight) / span * 100, 100)) : 0;
+  $('wbar').style.width = pct + '%';
+  $('wpct').textContent = Math.round(pct) + '% of the way';
+  const left = (S.weight - S.goal);
+  const d = $('goalD').value ? new Date($('goalD').value) : null;
+  let wk = '';
+  if(d && !isNaN(d)){
+    const weeks = Math.max(1, Math.round((d - new Date()) / 6048e5));
+    wk = ` · ${(left/weeks).toFixed(2)} kg/wk needed`;
+  }
+  $('wleft').textContent = left > 0 ? `${left.toFixed(1)} kg to go${wk}` : 'goal reached';
+  $('delta').textContent = (S.weight - S.lastWeek).toFixed(1) + ' kg vs last week';
+}
+function paintSpark(){
+  const h = S.history, min = Math.min(...h) - .5, max = Math.max(...h) + .5;
+  const pts = h.map((v,i) => [i/(h.length-1)*296+2, 48 - (v-min)/(max-min)*40]);
+  const line = pts.map(p => p.join(',')).join(' ');
+  const area = `2,50 ${line} 298,50`;
+  $('spark').innerHTML = `
+    <defs><linearGradient id="sp" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF6A3D" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FF6A3D" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="${area}" fill="url(#sp)"/>
+    <polyline points="${line}" fill="none" stroke="url(#burn)" stroke-width="2.4"
+      stroke-linecap="round" stroke-linejoin="round"/>
+    ${pts.map((p,i) => `<circle cx="${p[0]}" cy="${p[1]}" r="${i===pts.length-1?3.6:2}"
+      fill="${i===pts.length-1?'#FFC24B':'rgba(255,194,75,.5)'}"/>`).join('')}`;
+}
+$('goalW').addEventListener('input', e => {
+  const v = parseFloat(e.target.value); if(!isNaN(v)){ S.goal = v; paintWeight(); }
+});
+$('goalD').addEventListener('input', paintWeight);
+$('todayW').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  if(!isNaN(v)){ S.weight = v; paintWeight(); paintSpark(); persistWeight(v); }
+});
+$('todayW').addEventListener('blur', e => {
+  const v = parseFloat(e.target.value); if(!isNaN(v)) persistWeight.flush(v);
+});
+
+/* =======================================================
+   SLEEP
+   ======================================================= */
+function paintSleep(){
+  const [bh,bm] = $('bed').value.split(':').map(Number);
+  const [wh,wm] = $('wake').value.split(':').map(Number);
+  let mins = (wh*60+wm) - (bh*60+bm); if(mins <= 0) mins += 1440;
+  $('slDur').textContent = Math.floor(mins/60) + 'h ' + String(mins%60).padStart(2,'0') + 'm';
+
+  const goal = parseFloat($('slGoal').value) || 7.5;
+  S.sleep.goal = goal;
+  $('slGoalLbl').textContent = goal + ' h';
+
+  const wk = S.sleep.week.slice(0,6).concat([mins/60]);
+  const debt = wk.reduce((a,v) => a + Math.max(0, goal - v), 0);
+  $('slDebt').textContent = debt.toFixed(1) + ' h';
+
+  const maxH = Math.max(goal + 1.2, ...wk);
+  const names = ['M','T','W','T','F','S','S'];
+  const bars = wk.map((v,i) =>
+    `<div class="sbar${v < goal ? ' short':''}"><i style="height:${v/maxH*100}%"></i><span>${names[i]}</span></div>`).join('');
+  $('sbars').innerHTML = `<div class="goalline" style="bottom:${goal/maxH*100*0.79 + 21}%"></div>` + bars;
+}
+['bed','wake','slGoal'].forEach(id => {
+  $(id).addEventListener('input', () => { paintSleep(); persist(); });
+  $(id).addEventListener('blur', () => persist.flush());
+});
+$('slQual').addEventListener('change', persist);
+$('streak').addEventListener('input', persist);
+$('streak').addEventListener('blur', () => persist.flush());
+
+/* =======================================================
+   COUNT-UP + BOOT
+   ======================================================= */
+function countUp(){
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const to = parseFloat(el.dataset.count), dec = +(el.dataset.dec || 0);
+    if(RM){ el.textContent = to.toFixed(dec); return; }
+    const t0 = performance.now(), dur = 900;
+    const step = now => {
+      const k = Math.min((now - t0)/dur, 1), e = 1 - Math.pow(1-k, 3);
+      el.textContent = dec ? (to*e).toFixed(dec) : fmt(to*e);
+      if(k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+$('dateChip').textContent = new Date().toLocaleDateString('en-IN',
+  {weekday:'long', day:'numeric', month:'short', year:'numeric'});
+$('todayChip').textContent = 'Today: ' + DAYS.find(d => d.k === DOW[new Date().getDay()]).lbl;
+
+function paintAll(){
+  buildDays(); buildExercises(); buildMeals(); recalc();
+  buildGlasses(); buildSupps(); paintWeight(); paintSpark(); paintSleep(); countUp();
+}
+
+$('lockDay').addEventListener('click', async () => {
+  persist.flush();
+  const btn = $('lockDay');
+  const original = btn.textContent;
+  btn.textContent = 'Logged for today ✓';
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 2000);
+});
+
+/* =======================================================
+   AUTH GATE
+   ======================================================= */
+async function bootDashboard(){
+  $('loginScreen').style.display = 'none';
+  $('dashboard').style.display = '';
+  try{ await loadAllFromSupabase(); }
+  catch(e){ console.warn('Supabase load failed, continuing with local defaults', e); }
+  paintAll();
+}
+
+$('loginBtn').addEventListener('click', async () => {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPass').value;
+  if(!email || !password){ $('loginMsg').textContent = 'Enter your email and password.'; return; }
+  $('loginBtn').disabled = true;
+  $('loginMsg').textContent = 'Signing in…';
+  try{
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    CURRENT_UID = data.user.id;
+    await bootDashboard();
+  }catch(e){
+    $('loginMsg').textContent = e.message || 'Login failed.';
+    $('loginBtn').disabled = false;
+  }
+});
+$('loginPass').addEventListener('keydown', e => { if(e.key === 'Enter') $('loginBtn').click(); });
+
+$('logoutBtn').addEventListener('click', async () => {
+  try{ await sb.auth.signOut(); }catch(e){}
+  location.reload();
+});
+
+(async function checkSession(){
+  try{
+    const { data } = await sb.auth.getSession();
+    if(data && data.session){
+      CURRENT_UID = data.session.user.id;
+      await bootDashboard();
+      return;
+    }
+  }catch(e){ console.warn('session check failed', e); }
+  $('loginScreen').style.display = '';
+  $('dashboard').style.display = 'none';
+})();
+</script>
+</body>
+</html>

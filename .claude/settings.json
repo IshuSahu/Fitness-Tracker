@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Search(*)",
+      "WebSearch",
+      "PowerShell",
+      "PowerShell(*)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; Write-Output \"PID $\\($_.OwningProcess\\) $\\($p.ProcessName\\)\" })",
+      "PowerShell(Stop-Process -Id 21628 -Force)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 2; Write-Output \"port 4000 cleared\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4100 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 2; Write-Output \"port 4100 cleared\")",
+      "PowerShell(Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction | Format-Table -AutoSize; Write-Output \"--- existing rules for node/3000/4000 ---\"; Get-NetFirewallRule -Direction Inbound -Enabled True | Where-Object { $_.DisplayName -match 'node|3000|4000|Sisters|ERP' } | Select-Object DisplayName, Profile, Action | Format-Table -AutoSize)",
+      "PowerShell(Get-NetFirewallRule -DisplayName 'Node.js JavaScript Runtime')",
+      "PowerShell(Get-NetConnectionProfile)",
+      "PowerShell(Get-NetFirewallRule -DisplayName 'Node.js JavaScript Runtime' | ForEach-Object { $f = $_ | Get-NetFirewallApplicationFilter; [PSCustomObject]@{ Program = $f.Program; Profile = $_.Profile; Action = $_.Action } } | Format-Table -AutoSize; Write-Output \"--- where is node ---\"; \\(Get-Command node\\).Source)",
+      "PowerShell(Get-NetTCPConnection -State Listen -LocalPort 3000,4000 -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 31348 -Force -ErrorAction SilentlyContinue)",
+      "Bash(npx tsc *)",
+      "Skill(browse:browser)",
+      "Skill(browse:browser:*)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match \"chrome|node\" } | Select-Object Id, ProcessName, StartTime | Format-Table -AutoSize)",
+      "PowerShell(Get-NetTCPConnection -State Listen -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; \"$\\($_.OwningProcess\\) $\\($p.ProcessName\\) $\\($p.Path\\) $\\($p.StartTime\\)\" })",
+      "PowerShell(Stop-Process -Id 22780,24240 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -in 3100,4000})",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -in 3100,4000} | Select-Object LocalPort,OwningProcess)",
+      "PowerShell(Stop-Process -Id 29856,17508 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -in 3100,4000})",
+      "PowerShell(Stop-Process -Id 3824,6348 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -in 3100,4000})",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
+    ]
+  }
+}
