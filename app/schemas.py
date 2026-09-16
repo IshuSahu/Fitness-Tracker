@@ -42,6 +42,7 @@ class PlanExercise(BaseModel):
     order_no: int
     exercise_id: str
     name: str
+    mode: str
     sets: int
     rep_lo: int
     rep_hi: int
@@ -51,6 +52,7 @@ class PlanExercise(BaseModel):
     muscles: list[str]
     overridden: bool
     override_note: str = ""
+    override_load_kg: Optional[float] = None
 
 
 class PlanOut(BaseModel):
@@ -71,7 +73,7 @@ class LiftStateEntry(BaseModel):
 
 class SetIn(BaseModel):
     exercise_id: str
-    weight_kg: float
+    weight_kg: Optional[float] = None
     reps: int
 
 

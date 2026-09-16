@@ -1052,7 +1052,7 @@ function renderFigure(key){
 /* =======================================================
    SESSION CARD
    ======================================================= */
-let curDay = 'mon';   // the block starts Monday
+let curDay = DOW[new Date().getDay()];   // defaults to today; every day tab stays fully clickable/editable
 let curEx = 0;
 const doneMap = {};
 
@@ -1086,34 +1086,39 @@ function buildExercises(){
     const isToday = st && st.last_date === todayISO();
     const doneSets = isToday ? (st.last_sets || []) : [];
     const lastRef = (!isToday && st && st.last_sets && st.last_sets.length) ? st.last_sets[0] : null;
+    const showKg = x.mode === 'load';
+    const unitLabel = x.mode === 'time' ? 'sec' : 'reps';
     const rows = Array.from({length:x.sets}, (_,si) => {
       const set = doneSets[si];
       const isDone = !!set;
       const isActive = si === doneSets.length;
       return `<div class="logrow">
           <span class="logset">${si+1}</span>
-          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${isDone?set.load_kg:''}"
-            data-logw="${i}-${si}" ${isDone||!isActive?'disabled':''}
+          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${isDone && set.load_kg!=null?set.load_kg:''}"
+            data-logw="${i}-${si}" ${isDone||!isActive?'disabled':''} ${showKg?'':'style="display:none"'}
             aria-label="Weight for set ${si+1} of ${x.name} in kg">
-          <span class="logx">×</span>
-          <input type="number" class="loginp" placeholder="reps" step="1" min="0" value="${isDone?set.reps:''}"
+          ${showKg?'<span class="logx">×</span>':''}
+          <input type="number" class="loginp" placeholder="${unitLabel}" step="1" min="0" value="${isDone?set.reps:''}"
             data-logr="${i}-${si}" ${isDone||!isActive?'disabled':''}
-            aria-label="Reps for set ${si+1} of ${x.name}">
+            aria-label="${unitLabel==='sec'?'Seconds':'Reps'} for set ${si+1} of ${x.name}">
           <span class="logsaved" data-logsaved="${i}-${si}">${isDone?'✓':''}</span>
         </div>`;
     }).join('');
+    const overrideBits = [];
+    if(x.override_load_kg != null) overrideBits.push(`aim for ${x.override_load_kg} kg`);
+    overrideBits.push(x.override_note || 'load/rep target adjusted this week');
     return `
     <div class="ex${done[i]?' done':''}" aria-current="${i===curEx}">
       <button class="tick" aria-pressed="${done[i]}" data-tick="${i}" aria-label="Mark ${x.name} done">✓</button>
       <div class="exmain">
         <button style="background:none;border:none;padding:0;font:inherit;text-align:left;width:100%" data-pick="${i}">
           <div class="exname">${x.name}</div>
-          <div class="exmeta">${x.sets} × ${x.rep_lo === x.rep_hi ? x.rep_lo : x.rep_lo+'–'+x.rep_hi}</div>
+          <div class="exmeta">${x.sets} × ${x.rep_lo === x.rep_hi ? x.rep_lo : x.rep_lo+'–'+x.rep_hi}${showKg?'':' '+unitLabel}</div>
           <div class="exmeta" style="color:var(--dim2)">${x.muscles.join(' · ')}</div>
           ${x.alt?`<div class="exalt">↳ ${x.alt}</div>`:''}
-          ${x.overridden?`<div class="exalt" style="color:var(--gold)">Coach update: ${x.override_note||'load/rep target adjusted this week'}</div>`:''}
+          ${x.overridden?`<div class="exalt" style="color:var(--gold)">Coach update: ${overrideBits.join(' · ')}</div>`:''}
         </button>
-        ${lastRef?`<div class="exalt" style="color:var(--gold)">Last time: ${lastRef.load_kg} kg × ${lastRef.reps}${st.last_date?` (${st.last_date})`:''}</div>`:''}
+        ${lastRef?`<div class="exalt" style="color:var(--gold)">Last time: ${showKg&&lastRef.load_kg!=null?lastRef.load_kg+' kg × ':''}${lastRef.reps}${showKg?'':' '+unitLabel}${st.last_date?` (${st.last_date})`:''}</div>`:''}
         ${rows}
       </div>
     </div>`;
@@ -1126,10 +1131,16 @@ function buildExercises(){
     inp.addEventListener('change', async () => {
       const [i, si] = (inp.dataset.logw ?? inp.dataset.logr).split('-').map(Number);
       const ex = list[i];
-      const wEl = $('exlist').querySelector(`[data-logw="${i}-${si}"]`);
       const rEl = $('exlist').querySelector(`[data-logr="${i}-${si}"]`);
-      const w = parseFloat(wEl.value), r = parseInt(rEl.value, 10);
-      if(isNaN(w) || isNaN(r) || w <= 0 || r <= 0) return;
+      const r = parseInt(rEl.value, 10);
+      const needsWeight = ex.mode === 'load';
+      let w = null;
+      if(needsWeight){
+        const wEl = $('exlist').querySelector(`[data-logw="${i}-${si}"]`);
+        w = parseFloat(wEl.value);
+        if(isNaN(w) || w <= 0) return;
+      }
+      if(isNaN(r) || r <= 0) return;
       setStatus('saving');
       try{
         const st = await api('/api/sets', {

@@ -84,6 +84,9 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
                    returning e1rm_kg""",
                 session_id, body.exercise_id, set_index, body.weight_kg, body.reps,
             )
+            # e1RM is meaningless without a load (bodyweight/timed exercises);
+            # the generated column already resolves to 0 for a NULL/<=0 load,
+            # so best_e1rm_kg simply won't move for these -- correct.
             new_e1rm = float(new_set["e1rm_kg"] or 0)
 
             session_sets = await conn.fetch(
@@ -92,7 +95,10 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
                     order by set_index""",
                 session_id, body.exercise_id,
             )
-            last_sets = [{"load_kg": float(s["load_kg"]), "reps": s["reps"]} for s in session_sets]
+            last_sets = [
+                {"load_kg": float(s["load_kg"]) if s["load_kg"] is not None else None, "reps": s["reps"]}
+                for s in session_sets
+            ]
             best_reps_this_session = max(s["reps"] for s in last_sets)
 
             # rep-range target precedence for consecutive_misses:

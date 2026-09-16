@@ -27,10 +27,10 @@ async def get_plan(day_key: str, user_id: str = Depends(verify_jwt)):
     week_no = week_no_for(block["start_date"], today) if block else 1
 
     rows = await pool.fetch(
-        """select st.order_no, st.exercise_id, e.name, e.cue, e.alt, e.anim, e.muscles,
+        """select st.order_no, st.exercise_id, e.name, e.mode, e.cue, e.alt, e.anim, e.muscles,
                   st.base_sets, st.base_rep_lo, st.base_rep_hi,
                   po.sets as ov_sets, po.rep_lo as ov_rep_lo, po.rep_hi as ov_rep_hi,
-                  po.note as ov_note
+                  po.load_kg as ov_load_kg, po.note as ov_note
              from session_template st
              join exercise e on e.id = st.exercise_id
              left join prescription_override po
@@ -45,6 +45,7 @@ async def get_plan(day_key: str, user_id: str = Depends(verify_jwt)):
             order_no=r["order_no"],
             exercise_id=r["exercise_id"],
             name=r["name"],
+            mode=r["mode"],
             sets=r["ov_sets"] or r["base_sets"],
             rep_lo=r["ov_rep_lo"] or r["base_rep_lo"],
             rep_hi=r["ov_rep_hi"] or r["base_rep_hi"],
@@ -52,8 +53,10 @@ async def get_plan(day_key: str, user_id: str = Depends(verify_jwt)):
             alt=r["alt"] or "",
             anim=r["anim"] or "",
             muscles=list(r["muscles"] or []),
-            overridden=r["ov_sets"] is not None or r["ov_rep_lo"] is not None or r["ov_rep_hi"] is not None,
+            overridden=r["ov_sets"] is not None or r["ov_rep_lo"] is not None
+                       or r["ov_rep_hi"] is not None or r["ov_load_kg"] is not None,
             override_note=r["ov_note"] or "",
+            override_load_kg=float(r["ov_load_kg"]) if r["ov_load_kg"] is not None else None,
         )
         for r in rows
     ]
