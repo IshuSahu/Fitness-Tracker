@@ -628,17 +628,17 @@ const $ = id => document.getElementById(id);
 const fmt = n => Math.round(n).toLocaleString('en-IN');
 
 /* =======================================================
-   SUPABASE DATA LAYER
+   AUTH (supabase-js, login/logout only) + API CLIENT
+   All data now goes through the FastAPI backend, authenticated with the
+   Supabase session's JWT -- supabase-js itself is only used to sign in,
+   sign out, and read the current session/token.
    ======================================================= */
 const sb = window.supabase.createClient(
   'https://tbrywdestdngctdjdosl.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicnl3ZGVzdGRuZ2N0ZGpkb3NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzNDI0ODUsImV4cCI6MjEwNDkxODQ4NX0.WhMXSsDbgcTEXK5snkxRM2zx2w6snjz9lVjT-KmNtjc'
 );
-let CURRENT_UID = null;
-let LIFT_TODAY = {};   // exercise name -> [{w, r}, ...] each logged set today, in set order
-let LIFT_LAST  = {};   // exercise name -> {w, r, date} most recent prior session (single reference set)
+let AUTH_TOKEN = null;
 const dirty = { daily:false, weight:false };
-let liftRetryQueue = [];   // {name, sets} entries that failed to save, retried whole
 
 function todayISO(){
   const d = new Date();
@@ -658,23 +658,60 @@ function setStatus(state){
   else if(state === 'offline') chip.textContent = 'Offline — will retry';
 }
 
+async function currentAccessToken(){
+  if(AUTH_TOKEN) return AUTH_TOKEN;
+  const { data } = await sb.auth.getSession();
+  return data && data.session ? data.session.access_token : null;
+}
+
+async function api(path, opts = {}){
+  const token = await currentAccessToken();
+  const res = await fetch(path, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      ...(opts.headers || {}),
+    },
+  });
+  if(res.status === 401){
+    AUTH_TOKEN = null;
+    await sb.auth.signOut().catch(() => {});
+    $('dashboard').style.display = 'none';
+    $('loginScreen').style.display = '';
+    throw new Error('unauthorized');
+  }
+  if(!res.ok) throw new Error('http ' + res.status);
+  return res.status === 204 ? null : res.json();
+}
+
+function eatenTotals(){
+  return S.meals.filter(m => m.eaten)
+    .reduce((a, m) => ({ k: a.k + m.k, p: a.p + m.p, c: a.c + m.c, f: a.f + m.fa }), { k:0, p:0, c:0, f:0 });
+}
+function sleepHoursNow(){
+  const [bh,bm] = ($('bed').value || '00:00').split(':').map(Number);
+  const [wh,wm] = ($('wake').value || '00:00').split(':').map(Number);
+  let mins = (wh*60+wm) - (bh*60+bm); if(mins <= 0) mins += 1440;
+  return +(mins/60).toFixed(2);
+}
+
 function currentDailyPayload(){
+  const t = eatenTotals();
   return {
-    user_id: CURRENT_UID,
-    log_date: todayISO(),
     water_l: +((S.water.filled * S.water.glass / 1000).toFixed(3)),
     meals: S.meals.map(m => m.eaten),
     supplements: S.supps.map(s => s.done),
     sleep: { bed: $('bed').value, wake: $('wake').value, goal: S.sleep.goal, quality: $('slQual').value },
-    streak: parseInt($('streak').value, 10) || 0
+    kcal_eaten: t.k, protein_g: t.p, carbs_g: t.c, fat_g: t.f,
+    sleep_hours: sleepHoursNow(),
+    streak: parseInt($('streak').value, 10) || 0,
   };
 }
 async function tryPersistDaily(){
-  if(!CURRENT_UID) return;
   setStatus('saving');
   try{
-    const { error } = await sb.from('daily_logs').upsert(currentDailyPayload(), { onConflict: 'user_id,log_date' });
-    if(error) throw error;
+    await api('/api/daily/today', { method:'PUT', body: JSON.stringify(currentDailyPayload()) });
     dirty.daily = false;
     setStatus('saved');
   }catch(e){ dirty.daily = true; setStatus('offline'); }
@@ -682,127 +719,80 @@ async function tryPersistDaily(){
 const persist = debounce(tryPersistDaily, 500);
 
 async function tryPersistWeight(w){
-  if(!CURRENT_UID || isNaN(w)) return;
+  if(isNaN(w)) return;
   setStatus('saving');
   try{
-    const { error } = await sb.from('weight_logs')
-      .upsert({ user_id: CURRENT_UID, log_date: todayISO(), weight_kg: w }, { onConflict: 'user_id,log_date' });
-    if(error) throw error;
+    await api('/api/weight/today', { method:'PUT', body: JSON.stringify({ weight_kg: w }) });
     dirty.weight = false;
     setStatus('saved');
   }catch(e){ dirty.weight = true; setStatus('offline'); }
 }
 const persistWeight = debounce(tryPersistWeight, 500);
 
-function lastLog(name){ return LIFT_LAST[name] || null; }
-function todaySets(name){ return LIFT_TODAY[name] || []; }
-
-/*
- * lift_logs has no set-index column and no unique constraint, so a single
- * "set N" row can't be targeted for update -- only inserted or deleted.
- * Saving therefore replaces the whole day's rows for this exercise: delete
- * everything logged for (user, today, exercise), then reinsert every
- * currently-filled set in order. That keeps stored row order == set order
- * (via created_at) and makes correcting an earlier set's number safe.
- */
-async function saveExerciseSets(name, sets){
-  LIFT_TODAY[name] = sets.slice();
-  if(!CURRENT_UID) return;
-  setStatus('saving');
-  try{
-    const { error: delErr } = await sb.from('lift_logs').delete()
-      .eq('user_id', CURRENT_UID).eq('log_date', todayISO()).eq('exercise', name);
-    if(delErr) throw delErr;
-    if(sets.length){
-      const rows = sets.map(s => ({ user_id: CURRENT_UID, log_date: todayISO(), exercise: name, weight_kg: s.w, reps: s.r }));
-      const { error: insErr } = await sb.from('lift_logs').insert(rows);
-      if(insErr) throw insErr;
-    }
-    setStatus('saved');
-  }catch(e){
-    liftRetryQueue = liftRetryQueue.filter(item => item.name !== name);
-    liftRetryQueue.push({ name, sets: sets.slice() });
-    setStatus('offline');
-  }
-}
-
 async function retryAll(){
   let attempted = false;
   if(dirty.daily){ attempted = true; await tryPersistDaily(); }
   if(dirty.weight){ attempted = true; await tryPersistWeight(parseFloat($('todayW').value)); }
-  if(liftRetryQueue.length){
-    attempted = true;
-    const queue = liftRetryQueue; liftRetryQueue = [];
-    for(const item of queue) await saveExerciseSets(item.name, item.sets);
-  }
-  if(attempted && !dirty.daily && !dirty.weight && !liftRetryQueue.length) setStatus('saved');
+  if(attempted && !dirty.daily && !dirty.weight) setStatus('saved');
 }
 window.addEventListener('online', retryAll);
 setInterval(retryAll, 10000);
 
-async function loadAllFromSupabase(){
-  const today = todayISO();
+let LIFT_STATE = {};   // exercise_id -> {last_date, last_sets:[{load_kg,reps}], consecutive_misses, best_e1rm_kg, best_e1rm_date, sessions_logged}
+let PLAN_EXERCISES = [];   // current day's plan, from GET /api/plan/{day_key}
 
+async function loadLiftState(){
+  try{ LIFT_STATE = await api('/api/lift-state'); }
+  catch(e){ console.warn('lift-state load failed', e); }
+}
+
+async function loadPlan(dayKey){
   try{
-    const { data, error } = await sb.from('daily_logs').select('*')
-      .eq('user_id', CURRENT_UID).eq('log_date', today).limit(1);
-    if(error) throw error;
-    const row = data && data[0];
-    if(row){
-      if(Array.isArray(row.meals)) row.meals.forEach((v,i) => { if(S.meals[i]) S.meals[i].eaten = !!v; });
-      if(Array.isArray(row.supplements)) row.supplements.forEach((v,i) => { if(S.supps[i]) S.supps[i].done = !!v; });
-      S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
-      if(row.sleep && typeof row.sleep === 'object'){
-        if(row.sleep.bed) $('bed').value = row.sleep.bed;
-        if(row.sleep.wake) $('wake').value = row.sleep.wake;
-        if(row.sleep.goal){ $('slGoal').value = row.sleep.goal; S.sleep.goal = row.sleep.goal; }
-        if(row.sleep.quality) $('slQual').value = row.sleep.quality;
-      }
-      if(row.streak != null) $('streak').value = row.streak;
-    } else {
-      S.meals.forEach(m => m.eaten = false);
-      S.supps.forEach(s => s.done = false);
-      S.water.filled = 0;
-    }
+    const plan = await api('/api/plan/' + dayKey);
+    PLAN_EXERCISES = plan.exercises;
   }catch(e){
-    console.warn('daily_logs load failed, using local defaults', e);
+    console.warn('plan load failed', e);
+    PLAN_EXERCISES = [];
+  }
+}
+
+async function loadAllFromApi(){
+  try{
+    const row = await api('/api/daily/today');
+    S.meals.forEach((m,i) => { m.eaten = !!(row.meals && row.meals[i]); });
+    S.supps.forEach((s,i) => { s.done = !!(row.supplements && row.supplements[i]); });
+    S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
+    if(row.sleep && typeof row.sleep === 'object'){
+      if(row.sleep.bed) $('bed').value = row.sleep.bed;
+      if(row.sleep.wake) $('wake').value = row.sleep.wake;
+      if(row.sleep.goal){ $('slGoal').value = row.sleep.goal; S.sleep.goal = row.sleep.goal; }
+      if(row.sleep.quality) $('slQual').value = row.sleep.quality;
+    }
+    if(row.streak != null) $('streak').value = row.streak;
+  }catch(e){
+    console.warn('daily load failed, using local defaults', e);
     S.meals.forEach(m => m.eaten = false);
     S.supps.forEach(s => s.done = false);
     S.water.filled = 0;
   }
 
   try{
-    const { data, error } = await sb.from('weight_logs').select('log_date, weight_kg')
-      .eq('user_id', CURRENT_UID).order('log_date', { ascending:false }).limit(8);
-    if(error) throw error;
-    if(data && data.length){
-      const todayRow = data.find(r => r.log_date === today);
-      S.history = data.slice().reverse().map(r => +r.weight_kg);
+    const today = todayISO();
+    const rows = await api('/api/weight?limit=8');
+    if(rows && rows.length){
+      const todayRow = rows.find(r => r.log_date === today);
+      S.history = rows.map(r => +r.weight_kg);
       S.start = S.history[0];
-      const weekAgo = data.find(r => (new Date(today) - new Date(r.log_date)) >= 6*864e5);
+      const weekAgo = rows.find(r => (new Date(today) - new Date(r.log_date)) >= 6*864e5);
       if(weekAgo) S.lastWeek = +weekAgo.weight_kg;
-      S.weight = todayRow ? +todayRow.weight_kg : +data[0].weight_kg;
+      S.weight = todayRow ? +todayRow.weight_kg : +rows[rows.length-1].weight_kg;
       $('todayW').value = todayRow ? todayRow.weight_kg : '';
       $('wHistTag').textContent = 'your history';
     }
-  }catch(e){ console.warn('weight_logs load failed, using sample history', e); }
+  }catch(e){ console.warn('weight load failed, using sample history', e); }
 
-  try{
-    LIFT_TODAY = {}; LIFT_LAST = {};
-    // ascending: today's rows arrive in the order they were logged (set 1, 2, 3...),
-    // and for prior days the LAST matching row seen ends up being the most recent one
-    const { data, error } = await sb.from('lift_logs')
-      .select('log_date, exercise, weight_kg, reps, created_at')
-      .eq('user_id', CURRENT_UID).order('created_at', { ascending:true }).limit(500);
-    if(error) throw error;
-    (data || []).forEach(row => {
-      if(row.log_date === today){
-        (LIFT_TODAY[row.exercise] = LIFT_TODAY[row.exercise] || []).push({ w:+row.weight_kg, r:row.reps });
-      } else {
-        LIFT_LAST[row.exercise] = { w:+row.weight_kg, r:row.reps, date: row.log_date };
-      }
-    });
-  }catch(e){ console.warn('lift_logs load failed', e); }
+  await loadLiftState();
+  await loadPlan(curDay);
 }
 
 /* =======================================================
@@ -864,118 +854,11 @@ const DAYS = [
 ];
 const DOW = ['sun','mon','tue','wed','thu','fri','sat'];
 
-const WORKOUTS = {
-mon:[
- {n:"Incline dumbbell press",a:"incline",s:"4 × 8–10",l:"leave 2–3 reps in reserve",r:"90 s",
-  m:["Upper chest","Front delts","Triceps"],cue:"Elbows about 45° from your ribs, not flared to 90°. Press slightly back, over your eyes.",
-  alt:"Shoulder-friendlier: machine incline press — same angle, fixed path, no stabilising load."},
- {n:"Flat barbell or machine chest press",a:"bench",s:"3 × 8–10",l:"leave 2 reps in reserve",r:"90 s",
-  m:["Mid chest","Triceps"],cue:"Shoulder blades pinned back and down for the whole set — never let them roll forward.",
-  alt:"Shoulder-friendlier: neutral-grip machine press if the straight bar pinches at the bottom."},
- {n:"Seated neutral-grip dumbbell press",a:"ohp",s:"3 × 10–12",l:"leave 3 reps in reserve",r:"75 s",
-  m:["Front delts","Side delts","Triceps"],cue:"Palms facing each other, stop just short of lockout, no lower-back arch.",
-  alt:"Shoulder-friendlier: landmine press or 45° low-incline press — half the shoulder rotation."},
- {n:"Cable lateral raise",a:"lateral",s:"3 × 12–15",l:"light — the first rep should feel easy",r:"60 s",
-  m:["Side delts"],cue:"Lead with the elbow, thumb turned slightly down, and don't let the shrug take over.",
-  alt:"Replaces upright rows entirely — those are the classic shoulder aggravator."},
- {n:"Cable triceps pushdown",a:"pushdown",s:"3 × 12–15",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Triceps — lateral head"],cue:"Elbows glued to your sides. Only the forearm moves.",alt:""},
- {n:"Overhead rope extension",a:"ohext",s:"2 × 12–15",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Triceps — long head"],cue:"Feel the stretch at the bottom, keep ribs down rather than flaring them.",
-  alt:"Shoulder-friendlier: cross-body kickback if the overhead position feels tight tonight."},
- {n:"Plank",a:"plank",s:"3 × 40–50 s",l:"bodyweight",r:"45 s",
-  m:["Deep core","Abs"],cue:"Squeeze glutes, tuck ribs toward hips. End the set when the hips sag, not when the clock says so.",alt:""},
- {n:"Incline treadmill walk",a:"walk",s:"12 min",l:"4.5–5 km/h at 8–10% incline",r:"—",
-  m:["Conditioning"],cue:"Nose-breathing pace — you should still be able to hold a conversation.",alt:""}
-],
-tue:[
- {n:"Lat pulldown",a:"pulldown",s:"4 × 8–10",l:"leave 2–3 reps in reserve",r:"90 s",
-  m:["Lats","Biceps"],cue:"Pull your elbows to your ribs, not the bar to your chin.",alt:""},
- {n:"Seated cable row",a:"row",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"90 s",
-  m:["Mid back","Rhomboids"],cue:"Squeeze for a full second at the back, and stop rocking your torso.",alt:""},
- {n:"Chest-supported dumbbell row",a:"row",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"75 s",
-  m:["Upper back","Lats"],cue:"Chest stays on the pad — that's the whole point of the variation.",alt:""},
- {n:"Face pull",a:"row",s:"3 × 15",l:"light and controlled",r:"60 s",
-  m:["Rear delts","Rotator cuff"],cue:"Pull to your forehead, thumbs back. Best insurance you have for that shoulder.",alt:""},
- {n:"Dumbbell biceps curl",a:"curl",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Biceps"],cue:"Elbows still, no swing. Lower slower than you lift.",alt:""},
- {n:"Hammer curl",a:"curl",s:"2 × 12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Brachialis","Forearms"],cue:"Neutral grip throughout — this is what adds arm width.",alt:""}
-],
-wed:[
- {n:"Barbell or goblet squat",a:"squat",s:"4 × 8",l:"leave 2–3 reps in reserve",r:"2 min",
-  m:["Quads","Glutes"],cue:"Knees track over mid-foot, depth only as far as your back stays neutral.",alt:""},
- {n:"Leg press",a:"squat",s:"3 × 10–12",l:"leave 2 reps in reserve",r:"90 s",
-  m:["Quads","Glutes"],cue:"Don't let your hips curl off the pad at the bottom.",alt:""},
- {n:"Romanian deadlift",a:"rdl",s:"3 × 10",l:"leave 3 reps in reserve",r:"90 s",
-  m:["Hamstrings","Glutes"],cue:"Push your hips back, bar grazing your thighs. Hinge, don't squat.",alt:""},
- {n:"Seated leg curl",a:"rdl",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Hamstrings"],cue:"Control the way back up — that's where hamstrings actually grow.",alt:""},
- {n:"Standing calf raise",a:"walk",s:"3 × 15",l:"leave 2 reps in reserve",r:"45 s",
-  m:["Calves"],cue:"Full pause at the top, full stretch at the bottom.",alt:""},
- {n:"Plank",a:"plank",s:"3 × 45 s",l:"bodyweight",r:"45 s",
-  m:["Core"],cue:"Brace as if someone's about to push you sideways.",alt:""}
-],
-thu:[
- {n:"Easy walk",a:"walk",s:"35–45 min",l:"conversational pace — you could hold a phone call",r:"—",
-  m:["Blood flow","Recovery","Fat loss"],cue:"Outdoors if you can, after dinner or before work. This is not a cardio session in disguise — if you are breathing hard, slow down.",
-  alt:"Split it: 20 min in the morning, 20 min after work. Same benefit."},
- {n:"Full-body stretch circuit",a:"fold",s:"2 rounds · 30–45 s per hold",l:"stretch to mild tension, never to pain",r:"no rest needed",
-  m:["Hamstrings","Hip flexors","Quads","Chest","Lats"],
-  cue:"Six holds: standing hamstring fold, half-kneeling hip flexor, standing quad, doorway chest stretch, overhead lat side-bend, seated figure-4 glute. Breathe out as you settle deeper — no bouncing.",
-  alt:"Hamstrings and hip flexors matter most after a week of desk work and squats. If you only have six minutes, do those two."},
- {n:"Shoulder mobility circuit",a:"circles",s:"2 rounds · 10–12 reps each",l:"bodyweight or a light band",r:"no rest needed",
-  m:["Shoulders","Rotator cuff","Thoracic spine"],
-  cue:"Slow arm circles both directions, band pull-aparts, wall slides, then 10 open-books lying on your side. This is the maintenance work that keeps your shoulder quiet through a pressing block.",
-  alt:"Nothing here should pinch. If a movement catches, shrink the range until it doesn't — don't push through it."},
- {n:"Dead bug or light plank",a:"plank",s:"2 × 30–40 s",l:"optional, easy effort",r:"45 s",
-  m:["Deep core"],cue:"Optional. Breathe normally the whole time — if you are straining, skip it and keep the day genuinely easy.",
-  alt:"On a bad-sleep week, drop this and the mobility circuit. The walk alone is the day doing its job."}
-],
-fri:[
- {n:"Seated machine shoulder press",a:"ohp",s:"3 × 10",l:"leave 2–3 reps in reserve",r:"90 s",
-  m:["Front delts","Triceps"],cue:"Fixed path, so push effort a little harder than with free weights.",
-  alt:"Shoulder-friendlier: stop at eyebrow height if the top feels tight."},
- {n:"Incline dumbbell press",a:"incline",s:"3 × 10",l:"leave 2 reps in reserve",r:"90 s",
-  m:["Upper chest","Front delts"],cue:"Lower under control — the stretch is the stimulus.",alt:""},
- {n:"Cable fly or pec deck",a:"bench",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Chest"],cue:"Think of hugging a barrel; elbows stay slightly bent.",alt:""},
- {n:"Dumbbell lateral raise",a:"lateral",s:"4 × 12–15",l:"light",r:"60 s",
-  m:["Side delts"],cue:"Four sets on purpose — side delts are what make your waist look narrower.",alt:""},
- {n:"Overhead rope extension",a:"ohext",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Triceps — long head"],cue:"Elbows point forward, not out.",alt:""},
- {n:"Cable pushdown",a:"pushdown",s:"2 × 15",l:"finisher",r:"45 s",
-  m:["Triceps"],cue:"Last two sets of the night — chase the burn, not the weight.",alt:""}
-],
-sat:[
- {n:"Neutral-grip lat pulldown",a:"pulldown",s:"4 × 10",l:"leave 2 reps in reserve",r:"90 s",
-  m:["Lats","Biceps"],cue:"Lean back about 15° and pull to your upper chest.",alt:""},
- {n:"Single-arm cable row",a:"row",s:"3 × 12 each",l:"leave 2 reps in reserve",r:"75 s",
-  m:["Lats","Mid back"],cue:"Let the shoulder blade travel forward at the start for the full stretch.",alt:""},
- {n:"Rear-delt cable fly",a:"lateral",s:"3 × 15",l:"light",r:"60 s",
-  m:["Rear delts"],cue:"Rear delts balance all your pressing. Don't rush these.",alt:""},
- {n:"Incline dumbbell curl",a:"curl",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Biceps — long head"],cue:"Arms hang behind your body; that stretch is the whole exercise.",alt:""},
- {n:"Cable curl",a:"curl",s:"2 × 15",l:"finisher",r:"45 s",
-  m:["Biceps"],cue:"Constant tension, no rest at the bottom.",alt:""},
- {n:"Treadmill walk",a:"walk",s:"15 min",l:"5 km/h, 6–8% incline",r:"—",
-  m:["Conditioning"],cue:"Easy finish to the week.",alt:""}
-],
-sun:[
- {n:"Romanian deadlift",a:"rdl",s:"4 × 8",l:"leave 2–3 reps in reserve",r:"2 min",
-  m:["Hamstrings","Glutes","Back"],cue:"Hips back, spine neutral, stop when the hamstrings run out of stretch.",alt:""},
- {n:"Bulgarian split squat",a:"squat",s:"3 × 10 each",l:"bodyweight or light dumbbells",r:"90 s",
-  m:["Quads","Glutes"],cue:"Front shin near vertical. Humbling by rep 8 — that's normal.",alt:""},
- {n:"Leg extension",a:"squat",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Quads"],cue:"One second squeeze at the top.",alt:""},
- {n:"Seated leg curl",a:"rdl",s:"3 × 12",l:"leave 2 reps in reserve",r:"60 s",
-  m:["Hamstrings"],cue:"Slow negatives.",alt:""},
- {n:"Hanging knee raise",a:"plank",s:"3 × 12",l:"bodyweight",r:"60 s",
-  m:["Abs","Hip flexors"],cue:"Curl your pelvis up rather than just swinging your legs.",alt:""},
- {n:"Incline walk",a:"walk",s:"15 min",l:"4.5–5 km/h, 8–10%",r:"—",
-  m:["Conditioning"],cue:"Weekend session, so no rush — enjoy it.",alt:""}
-]
-};
+// Exercise data (sets/reps/cue/alt/anim/muscles) now comes from
+// GET /api/plan/{day_key} -- see PLAN_EXERCISES / loadPlan() above.
+// Rest-time and "reps in reserve" hint text aren't part of that response
+// (session_template/exercise don't carry them), so those two are no longer
+// shown per exercise; everything else is unchanged.
 
 /* =======================================================
    STICK-FIGURE ANIMATION ENGINE
@@ -1177,45 +1060,60 @@ function buildDays(){
   const todayK = DOW[new Date().getDay()];
   $('days').innerHTML = DAYS.map(d =>
     `<button class="day${d.k===todayK?' today':''}" data-day="${d.k}" aria-pressed="${d.k===curDay}">${d.lbl}</button>`).join('');
-  $('days').querySelectorAll('.day').forEach(b => b.addEventListener('click', () => {
-    curDay = b.dataset.day; curEx = 0; buildDays(); buildExercises();
+  $('days').querySelectorAll('.day').forEach(b => b.addEventListener('click', async () => {
+    curDay = b.dataset.day; curEx = 0; buildDays();
+    await loadPlan(curDay);
+    buildExercises();
   }));
 }
 
-function setCountFor(x){
-  const m = /^(\d+)\s*×/.exec(x.s);
-  return m ? Math.max(1, parseInt(m[1], 10)) : 1;
-}
-
+// A set can only ever be appended (POST /api/sets computes set_index from a
+// live count server-side -- there's no way to target-update an earlier
+// index). So only the next not-yet-logged set is editable; logged ones show
+// read-only. This is a deliberate change from the previous freely-editable
+// grid, forced by that endpoint's contract.
 function buildExercises(){
-  const list = WORKOUTS[curDay];
+  const list = PLAN_EXERCISES;
   doneMap[curDay] = doneMap[curDay] || list.map(() => false);
   const done = doneMap[curDay];
+  if(!list.length){
+    $('exlist').innerHTML = '<p class="note">No plan found for this day yet.</p>';
+    $('exProgress').textContent = '';
+    return;
+  }
   $('exlist').innerHTML = list.map((x,i) => {
-    const last = lastLog(x.n);
-    const curSets = todaySets(x.n);
-    const n = setCountFor(x);
-    const rows = Array.from({length:n}, (_,si) => {
-      const cur = curSets[si];
+    const st = LIFT_STATE[x.exercise_id];
+    const isToday = st && st.last_date === todayISO();
+    const doneSets = isToday ? (st.last_sets || []) : [];
+    const lastRef = (!isToday && st && st.last_sets && st.last_sets.length) ? st.last_sets[0] : null;
+    const rows = Array.from({length:x.sets}, (_,si) => {
+      const set = doneSets[si];
+      const isDone = !!set;
+      const isActive = si === doneSets.length;
       return `<div class="logrow">
           <span class="logset">${si+1}</span>
-          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${cur?cur.w:''}" data-logw="${i}-${si}" aria-label="Weight for set ${si+1} of ${x.n} in kg">
+          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${isDone?set.load_kg:''}"
+            data-logw="${i}-${si}" ${isDone||!isActive?'disabled':''}
+            aria-label="Weight for set ${si+1} of ${x.name} in kg">
           <span class="logx">×</span>
-          <input type="number" class="loginp" placeholder="reps" step="1" min="0" value="${cur?cur.r:''}" data-logr="${i}-${si}" aria-label="Reps for set ${si+1} of ${x.n}">
-          <span class="logsaved" data-logsaved="${i}-${si}">${cur?'✓':''}</span>
+          <input type="number" class="loginp" placeholder="reps" step="1" min="0" value="${isDone?set.reps:''}"
+            data-logr="${i}-${si}" ${isDone||!isActive?'disabled':''}
+            aria-label="Reps for set ${si+1} of ${x.name}">
+          <span class="logsaved" data-logsaved="${i}-${si}">${isDone?'✓':''}</span>
         </div>`;
     }).join('');
     return `
     <div class="ex${done[i]?' done':''}" aria-current="${i===curEx}">
-      <button class="tick" aria-pressed="${done[i]}" data-tick="${i}" aria-label="Mark ${x.n} done">✓</button>
+      <button class="tick" aria-pressed="${done[i]}" data-tick="${i}" aria-label="Mark ${x.name} done">✓</button>
       <div class="exmain">
         <button style="background:none;border:none;padding:0;font:inherit;text-align:left;width:100%" data-pick="${i}">
-          <div class="exname">${x.n}</div>
-          <div class="exmeta">${x.s} &middot; <em>${x.l}</em> &middot; rest ${x.r}</div>
-          <div class="exmeta" style="color:var(--dim2)">${x.m.join(' · ')}</div>
+          <div class="exname">${x.name}</div>
+          <div class="exmeta">${x.sets} × ${x.rep_lo === x.rep_hi ? x.rep_lo : x.rep_lo+'–'+x.rep_hi}</div>
+          <div class="exmeta" style="color:var(--dim2)">${x.muscles.join(' · ')}</div>
           ${x.alt?`<div class="exalt">↳ ${x.alt}</div>`:''}
+          ${x.overridden?`<div class="exalt" style="color:var(--gold)">Coach update: ${x.override_note||'load/rep target adjusted this week'}</div>`:''}
         </button>
-        ${last?`<div class="exalt" style="color:var(--gold)">Last time: ${last.w} kg × ${last.r}${last.date?` (${last.date})`:''}</div>`:''}
+        ${lastRef?`<div class="exalt" style="color:var(--gold)">Last time: ${lastRef.load_kg} kg × ${lastRef.reps}${st.last_date?` (${st.last_date})`:''}</div>`:''}
         ${rows}
       </div>
     </div>`;
@@ -1224,31 +1122,34 @@ function buildExercises(){
     b.addEventListener('click', () => { curEx = +b.dataset.pick; buildExercises(); }));
   $('exlist').querySelectorAll('[data-tick]').forEach(b =>
     b.addEventListener('click', () => { const i = +b.dataset.tick; done[i] = !done[i]; buildExercises(); }));
-  $('exlist').querySelectorAll('[data-logw],[data-logr]').forEach(inp =>
-    inp.addEventListener('change', () => {
+  $('exlist').querySelectorAll('[data-logw]:not([disabled]),[data-logr]:not([disabled])').forEach(inp =>
+    inp.addEventListener('change', async () => {
       const [i, si] = (inp.dataset.logw ?? inp.dataset.logr).split('-').map(Number);
-      const row = list[i];
-      const n = setCountFor(row);
-      const sets = [];
-      for(let k = 0; k < n; k++){
-        const wEl = $('exlist').querySelector(`[data-logw="${i}-${k}"]`);
-        const rEl = $('exlist').querySelector(`[data-logr="${i}-${k}"]`);
-        const w = parseFloat(wEl.value), r = parseInt(rEl.value, 10);
-        const tag = $('exlist').querySelector(`[data-logsaved="${i}-${k}"]`);
-        if(!isNaN(w) && !isNaN(r) && w > 0 && r > 0){
-          sets.push({ w, r });
-          if(tag) tag.textContent = '✓';
-        } else if(tag) tag.textContent = '';
-      }
-      saveExerciseSets(row.n, sets);
+      const ex = list[i];
+      const wEl = $('exlist').querySelector(`[data-logw="${i}-${si}"]`);
+      const rEl = $('exlist').querySelector(`[data-logr="${i}-${si}"]`);
+      const w = parseFloat(wEl.value), r = parseInt(rEl.value, 10);
+      if(isNaN(w) || isNaN(r) || w <= 0 || r <= 0) return;
+      setStatus('saving');
+      try{
+        const st = await api('/api/sets', {
+          method: 'POST',
+          body: JSON.stringify({ exercise_id: ex.exercise_id, weight_kg: w, reps: r }),
+        });
+        LIFT_STATE[ex.exercise_id] = st;
+        setStatus('saved');
+      }catch(e){ setStatus('offline'); }
+      buildExercises();
     }));
 
-  const x = list[curEx];
-  $('stageName').textContent = x.n;
-  $('stageTags').innerHTML = x.m.map(m => `<span>${m}</span>`).join('');
-  $('stageCue').textContent = x.cue;
-  $('stageAlt').textContent = x.alt || '';
-  renderFigure(x.a);
+  const x = list[curEx] || list[0];
+  if(x){
+    $('stageName').textContent = x.name;
+    $('stageTags').innerHTML = x.muscles.map(m => `<span>${m}</span>`).join('');
+    $('stageCue').textContent = x.cue;
+    $('stageAlt').textContent = x.alt || '';
+    renderFigure(x.anim);
+  }
   $('exProgress').textContent = `${done.filter(Boolean).length} of ${list.length} done`;
   const dayObj = DAYS.find(d => d.k === curDay);
   $('sessTag').textContent = dayObj.name;
@@ -1468,8 +1369,8 @@ $('lockDay').addEventListener('click', async () => {
 async function bootDashboard(){
   $('loginScreen').style.display = 'none';
   $('dashboard').style.display = '';
-  try{ await loadAllFromSupabase(); }
-  catch(e){ console.warn('Supabase load failed, continuing with local defaults', e); }
+  try{ await loadAllFromApi(); }
+  catch(e){ console.warn('API load failed, continuing with local defaults', e); }
   paintAll();
 }
 
@@ -1482,7 +1383,7 @@ $('loginBtn').addEventListener('click', async () => {
   try{
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if(error) throw error;
-    CURRENT_UID = data.user.id;
+    AUTH_TOKEN = data.session.access_token;
     await bootDashboard();
   }catch(e){
     $('loginMsg').textContent = e.message || 'Login failed.';
@@ -1492,6 +1393,7 @@ $('loginBtn').addEventListener('click', async () => {
 $('loginPass').addEventListener('keydown', e => { if(e.key === 'Enter') $('loginBtn').click(); });
 
 $('logoutBtn').addEventListener('click', async () => {
+  AUTH_TOKEN = null;
   try{ await sb.auth.signOut(); }catch(e){}
   location.reload();
 });
@@ -1500,7 +1402,7 @@ $('logoutBtn').addEventListener('click', async () => {
   try{
     const { data } = await sb.auth.getSession();
     if(data && data.session){
-      CURRENT_UID = data.session.user.id;
+      AUTH_TOKEN = data.session.access_token;
       await bootDashboard();
       return;
     }
