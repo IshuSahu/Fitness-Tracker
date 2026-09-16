@@ -363,7 +363,10 @@ input,select{font-family:inherit;color:var(--txt)}
     </div>
   </div>
   <div class="top-mid">
-    <span class="chip" id="dateChip">—</span>
+    <span class="chip">
+      <label for="viewDateIn" style="font-size:11.5px;color:var(--dim)">date</label>
+      <input class="streak-in" id="viewDateIn" type="date" style="width:118px;text-align:left" aria-label="Date to view and log for">
+    </span>
     <span class="chip phase">Recomposition / fat loss</span>
     <span class="chip sess" id="sessChip">Mon · Push A</span>
     <span class="chip" id="todayChip">Today</span>
@@ -638,6 +641,7 @@ const sb = window.supabase.createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicnl3ZGVzdGRuZ2N0ZGpkb3NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzNDI0ODUsImV4cCI6MjEwNDkxODQ4NX0.WhMXSsDbgcTEXK5snkxRM2zx2w6snjz9lVjT-KmNtjc'
 );
 let AUTH_TOKEN = null;
+let viewDate = todayISO();   // the date every water/meal/supplement/sleep/weight read+write applies to
 const dirty = { daily:false, weight:false };
 
 function todayISO(){
@@ -711,7 +715,7 @@ function currentDailyPayload(){
 async function tryPersistDaily(){
   setStatus('saving');
   try{
-    await api('/api/daily/today', { method:'PUT', body: JSON.stringify(currentDailyPayload()) });
+    await api('/api/daily?date=' + viewDate, { method:'PUT', body: JSON.stringify(currentDailyPayload()) });
     dirty.daily = false;
     setStatus('saved');
   }catch(e){ dirty.daily = true; setStatus('offline'); }
@@ -722,7 +726,7 @@ async function tryPersistWeight(w){
   if(isNaN(w)) return;
   setStatus('saving');
   try{
-    await api('/api/weight/today', { method:'PUT', body: JSON.stringify({ weight_kg: w }) });
+    await api('/api/weight?date=' + viewDate, { method:'PUT', body: JSON.stringify({ weight_kg: w }) });
     dirty.weight = false;
     setStatus('saved');
   }catch(e){ dirty.weight = true; setStatus('offline'); }
@@ -756,19 +760,18 @@ async function loadPlan(dayKey){
   }
 }
 
-async function loadAllFromApi(){
+async function loadDailyAndWeight(date){
   try{
-    const row = await api('/api/daily/today');
+    const row = await api('/api/daily?date=' + date);
     S.meals.forEach((m,i) => { m.eaten = !!(row.meals && row.meals[i]); });
     S.supps.forEach((s,i) => { s.done = !!(row.supplements && row.supplements[i]); });
     S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
-    if(row.sleep && typeof row.sleep === 'object'){
-      if(row.sleep.bed) $('bed').value = row.sleep.bed;
-      if(row.sleep.wake) $('wake').value = row.sleep.wake;
-      if(row.sleep.goal){ $('slGoal').value = row.sleep.goal; S.sleep.goal = row.sleep.goal; }
-      if(row.sleep.quality) $('slQual').value = row.sleep.quality;
-    }
-    if(row.streak != null) $('streak').value = row.streak;
+    const sleep = (row.sleep && typeof row.sleep === 'object') ? row.sleep : {};
+    $('bed').value = sleep.bed || '';
+    $('wake').value = sleep.wake || '';
+    if(sleep.goal){ $('slGoal').value = sleep.goal; S.sleep.goal = sleep.goal; }
+    $('slQual').value = sleep.quality || 'Okay';
+    $('streak').value = row.streak != null ? row.streak : 0;
   }catch(e){
     console.warn('daily load failed, using local defaults', e);
     S.meals.forEach(m => m.eaten = false);
@@ -777,20 +780,31 @@ async function loadAllFromApi(){
   }
 
   try{
-    const today = todayISO();
-    const rows = await api('/api/weight?limit=8');
+    const rows = await api('/api/weight?limit=8&date=' + date);
     if(rows && rows.length){
-      const todayRow = rows.find(r => r.log_date === today);
-      S.history = rows.map(r => +r.weight_kg);
+      // If `date` fell outside the normal recent-8 window, the backend
+      // appends it as one extra row (oldest-first once this list is
+      // reversed) -- excluded from the sparkline, which always shows the
+      // real recent trend regardless of what date is being edited.
+      const sparkRows = rows.length > 8 ? rows.slice(1) : rows;
+      const dateRow = rows.find(r => r.log_date === date);
+      const todayNow = todayISO();
+      S.history = sparkRows.map(r => +r.weight_kg);
       S.start = S.history[0];
-      const weekAgo = rows.find(r => (new Date(today) - new Date(r.log_date)) >= 6*864e5);
+      const weekAgo = sparkRows.find(r => (new Date(todayNow) - new Date(r.log_date)) >= 6*864e5);
       if(weekAgo) S.lastWeek = +weekAgo.weight_kg;
-      S.weight = todayRow ? +todayRow.weight_kg : +rows[rows.length-1].weight_kg;
-      $('todayW').value = todayRow ? todayRow.weight_kg : '';
+      if(dateRow) S.weight = +dateRow.weight_kg;
+      else if(sparkRows.length) S.weight = +sparkRows[sparkRows.length-1].weight_kg;
+      $('todayW').value = dateRow ? dateRow.weight_kg : '';
       $('wHistTag').textContent = 'your history';
+    } else {
+      $('todayW').value = '';
     }
   }catch(e){ console.warn('weight load failed, using sample history', e); }
+}
 
+async function loadAllFromApi(){
+  await loadDailyAndWeight(viewDate);
   await loadLiftState();
   await loadPlan(curDay);
 }
@@ -1356,14 +1370,22 @@ function countUp(){
   });
 }
 
-$('dateChip').textContent = new Date().toLocaleDateString('en-IN',
-  {weekday:'long', day:'numeric', month:'short', year:'numeric'});
+$('viewDateIn').value = viewDate;
 $('todayChip').textContent = 'Today: ' + DAYS.find(d => d.k === DOW[new Date().getDay()]).lbl;
 
-function paintAll(){
-  buildDays(); buildExercises(); buildMeals(); recalc();
-  buildGlasses(); buildSupps(); paintWeight(); paintSpark(); paintSleep(); countUp();
+function paintDaily(){
+  buildMeals(); recalc(); buildGlasses(); buildSupps();
+  paintWeight(); paintSpark(); paintSleep();
 }
+function paintAll(){
+  buildDays(); buildExercises(); paintDaily(); countUp();
+}
+
+$('viewDateIn').addEventListener('change', async () => {
+  viewDate = $('viewDateIn').value || todayISO();
+  await loadDailyAndWeight(viewDate);
+  paintDaily();
+});
 
 $('lockDay').addEventListener('click', async () => {
   persist.flush();

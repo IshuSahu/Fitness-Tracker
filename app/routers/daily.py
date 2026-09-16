@@ -1,7 +1,7 @@
 from __future__ import annotations
 import datetime as dt
 import json
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from ..auth import verify_jwt
 from ..db import get_pool
@@ -10,14 +10,17 @@ from ..schemas import DailyOut, DailyIn
 router = APIRouter(prefix="/api/daily", tags=["daily"])
 
 
-@router.get("/today", response_model=DailyOut)
-async def get_today(user_id: str = Depends(verify_jwt)):
+@router.get("", response_model=DailyOut)
+async def get_daily(
+    date: dt.date = Query(default_factory=dt.date.today),
+    user_id: str = Depends(verify_jwt),
+):
     pool = await get_pool()
     row = await pool.fetchrow(
         """select water_l, meals, supplements, sleep, kcal_eaten, protein_g,
                   carbs_g, fat_g, sleep_hours, streak
-             from daily_logs where user_id = $1 and log_date = current_date""",
-        user_id,
+             from daily_logs where user_id = $1 and log_date = $2""",
+        user_id, date,
     )
     if not row:
         return DailyOut()
@@ -35,20 +38,24 @@ async def get_today(user_id: str = Depends(verify_jwt)):
     )
 
 
-@router.put("/today")
-async def put_today(body: DailyIn, user_id: str = Depends(verify_jwt)):
+@router.put("")
+async def put_daily(
+    body: DailyIn,
+    date: dt.date = Query(default_factory=dt.date.today),
+    user_id: str = Depends(verify_jwt),
+):
     pool = await get_pool()
     await pool.execute(
         """insert into daily_logs (user_id, log_date, water_l, meals, supplements, sleep,
                                    kcal_eaten, protein_g, carbs_g, fat_g, sleep_hours, streak)
-           values ($1, current_date, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11)
+           values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12)
            on conflict (user_id, log_date) do update set
              water_l = excluded.water_l, meals = excluded.meals,
              supplements = excluded.supplements, sleep = excluded.sleep,
              kcal_eaten = excluded.kcal_eaten, protein_g = excluded.protein_g,
              carbs_g = excluded.carbs_g, fat_g = excluded.fat_g,
              sleep_hours = excluded.sleep_hours, streak = excluded.streak""",
-        user_id, body.water_l, json.dumps(body.meals), json.dumps(body.supplements),
+        user_id, date, body.water_l, json.dumps(body.meals), json.dumps(body.supplements),
         json.dumps(body.sleep), body.kcal_eaten, body.protein_g, body.carbs_g,
         body.fat_g, body.sleep_hours, body.streak,
     )
