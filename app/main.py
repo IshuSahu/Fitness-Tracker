@@ -4,6 +4,9 @@ Supabase directly except for login/logout."""
 from __future__ import annotations
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
+load_dotenv()  # must run before importing db/routers, which read os.environ at import time
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
