@@ -648,6 +648,12 @@ function todayISO(){
   const d = new Date();
   return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
 }
+function dayKeyForISO(iso){
+  // parse y/m/d as local-time components (not UTC) so the weekday matches
+  // what the date picker actually shows, regardless of timezone offset
+  const [y, m, d] = iso.split('-').map(Number);
+  return DOW[new Date(y, m - 1, d).getDay()];
+}
 function debounce(fn, ms){
   let t;
   const wrapped = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
@@ -1383,7 +1389,12 @@ function paintAll(){
 
 $('viewDateIn').addEventListener('change', async () => {
   viewDate = $('viewDateIn').value || todayISO();
+  curDay = dayKeyForISO(viewDate);
+  curEx = 0;
+  buildDays();
   await loadDailyAndWeight(viewDate);
+  await loadPlan(curDay);
+  buildExercises();
   paintDaily();
 });
 
