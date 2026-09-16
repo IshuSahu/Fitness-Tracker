@@ -191,6 +191,13 @@ input,select{font-family:inherit;color:var(--txt)}
 .exmeta{font-size:11.5px;color:var(--dim);margin-top:3px}
 .exmeta em{font-style:normal;color:var(--gold)}
 .exalt{font-size:11px;color:var(--dim2);margin-top:4px}
+.logrow{display:flex;align-items:center;gap:6px;margin-top:6px}
+.logset{width:14px;flex:none;font-size:10.5px;color:var(--dim2);text-align:center}
+.loginp{width:60px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;
+  padding:5px 7px;font-size:12.5px;font-family:'Space Grotesk',sans-serif}
+.loginp:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.logx{font-size:11px;color:var(--dim2)}
+.logsaved{font-size:12px;color:var(--green);width:14px}
 
 .stage{
   border:1px solid var(--line);border-radius:14px;
@@ -628,10 +635,10 @@ const sb = window.supabase.createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicnl3ZGVzdGRuZ2N0ZGpkb3NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzNDI0ODUsImV4cCI6MjEwNDkxODQ4NX0.WhMXSsDbgcTEXK5snkxRM2zx2w6snjz9lVjT-KmNtjc'
 );
 let CURRENT_UID = null;
-let LIFT_TODAY = {};   // exercise name -> {w, r} logged today
-let LIFT_LAST  = {};   // exercise name -> {w, r, date} most recent prior session
+let LIFT_TODAY = {};   // exercise name -> [{w, r}, ...] each logged set today, in set order
+let LIFT_LAST  = {};   // exercise name -> {w, r, date} most recent prior session (single reference set)
 const dirty = { daily:false, weight:false };
-let liftRetryQueue = [];
+let liftRetryQueue = [];   // {name, sets} entries that failed to save, retried whole
 
 function todayISO(){
   const d = new Date();
@@ -688,17 +695,35 @@ async function tryPersistWeight(w){
 const persistWeight = debounce(tryPersistWeight, 500);
 
 function lastLog(name){ return LIFT_LAST[name] || null; }
-function todayLog(day, name){ return LIFT_TODAY[name] || null; }
-async function saveLog(name, w, r){
-  LIFT_TODAY[name] = { w, r };
+function todaySets(name){ return LIFT_TODAY[name] || []; }
+
+/*
+ * lift_logs has no set-index column and no unique constraint, so a single
+ * "set N" row can't be targeted for update -- only inserted or deleted.
+ * Saving therefore replaces the whole day's rows for this exercise: delete
+ * everything logged for (user, today, exercise), then reinsert every
+ * currently-filled set in order. That keeps stored row order == set order
+ * (via created_at) and makes correcting an earlier set's number safe.
+ */
+async function saveExerciseSets(name, sets){
+  LIFT_TODAY[name] = sets.slice();
   if(!CURRENT_UID) return;
   setStatus('saving');
-  const row = { user_id: CURRENT_UID, log_date: todayISO(), exercise: name, weight_kg: w, reps: r };
   try{
-    const { error } = await sb.from('lift_logs').insert(row);
-    if(error) throw error;
+    const { error: delErr } = await sb.from('lift_logs').delete()
+      .eq('user_id', CURRENT_UID).eq('log_date', todayISO()).eq('exercise', name);
+    if(delErr) throw delErr;
+    if(sets.length){
+      const rows = sets.map(s => ({ user_id: CURRENT_UID, log_date: todayISO(), exercise: name, weight_kg: s.w, reps: s.r }));
+      const { error: insErr } = await sb.from('lift_logs').insert(rows);
+      if(insErr) throw insErr;
+    }
     setStatus('saved');
-  }catch(e){ liftRetryQueue.push(row); setStatus('offline'); }
+  }catch(e){
+    liftRetryQueue = liftRetryQueue.filter(item => item.name !== name);
+    liftRetryQueue.push({ name, sets: sets.slice() });
+    setStatus('offline');
+  }
 }
 
 async function retryAll(){
@@ -708,10 +733,7 @@ async function retryAll(){
   if(liftRetryQueue.length){
     attempted = true;
     const queue = liftRetryQueue; liftRetryQueue = [];
-    for(const row of queue){
-      try{ const { error } = await sb.from('lift_logs').insert(row); if(error) throw error; }
-      catch(e){ liftRetryQueue.push(row); }
-    }
+    for(const item of queue) await saveExerciseSets(item.name, item.sets);
   }
   if(attempted && !dirty.daily && !dirty.weight && !liftRetryQueue.length) setStatus('saved');
 }
@@ -767,14 +789,16 @@ async function loadAllFromSupabase(){
 
   try{
     LIFT_TODAY = {}; LIFT_LAST = {};
+    // ascending: today's rows arrive in the order they were logged (set 1, 2, 3...),
+    // and for prior days the LAST matching row seen ends up being the most recent one
     const { data, error } = await sb.from('lift_logs')
       .select('log_date, exercise, weight_kg, reps, created_at')
-      .eq('user_id', CURRENT_UID).order('created_at', { ascending:false }).limit(400);
+      .eq('user_id', CURRENT_UID).order('created_at', { ascending:true }).limit(500);
     if(error) throw error;
     (data || []).forEach(row => {
       if(row.log_date === today){
-        if(!LIFT_TODAY[row.exercise]) LIFT_TODAY[row.exercise] = { w:+row.weight_kg, r:row.reps };
-      } else if(!LIFT_LAST[row.exercise]){
+        (LIFT_TODAY[row.exercise] = LIFT_TODAY[row.exercise] || []).push({ w:+row.weight_kg, r:row.reps });
+      } else {
         LIFT_LAST[row.exercise] = { w:+row.weight_kg, r:row.reps, date: row.log_date };
       }
     });
@@ -1158,13 +1182,29 @@ function buildDays(){
   }));
 }
 
+function setCountFor(x){
+  const m = /^(\d+)\s*×/.exec(x.s);
+  return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+}
+
 function buildExercises(){
   const list = WORKOUTS[curDay];
   doneMap[curDay] = doneMap[curDay] || list.map(() => false);
   const done = doneMap[curDay];
   $('exlist').innerHTML = list.map((x,i) => {
     const last = lastLog(x.n);
-    const cur = todayLog(curDay, x.n);
+    const curSets = todaySets(x.n);
+    const n = setCountFor(x);
+    const rows = Array.from({length:n}, (_,si) => {
+      const cur = curSets[si];
+      return `<div class="logrow">
+          <span class="logset">${si+1}</span>
+          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${cur?cur.w:''}" data-logw="${i}-${si}" aria-label="Weight for set ${si+1} of ${x.n} in kg">
+          <span class="logx">×</span>
+          <input type="number" class="loginp" placeholder="reps" step="1" min="0" value="${cur?cur.r:''}" data-logr="${i}-${si}" aria-label="Reps for set ${si+1} of ${x.n}">
+          <span class="logsaved" data-logsaved="${i}-${si}">${cur?'✓':''}</span>
+        </div>`;
+    }).join('');
     return `
     <div class="ex${done[i]?' done':''}" aria-current="${i===curEx}">
       <button class="tick" aria-pressed="${done[i]}" data-tick="${i}" aria-label="Mark ${x.n} done">✓</button>
@@ -1176,12 +1216,7 @@ function buildExercises(){
           ${x.alt?`<div class="exalt">↳ ${x.alt}</div>`:''}
         </button>
         ${last?`<div class="exalt" style="color:var(--gold)">Last time: ${last.w} kg × ${last.r}${last.date?` (${last.date})`:''}</div>`:''}
-        <div class="logrow">
-          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${cur?cur.w:''}" data-logw="${i}" aria-label="Weight used for ${x.n} in kg">
-          <span class="logx">×</span>
-          <input type="number" class="loginp" placeholder="reps" step="1" min="0" value="${cur?cur.r:''}" data-logr="${i}" aria-label="Reps completed for ${x.n}">
-          <span class="logsaved" data-logsaved="${i}">${cur?'✓ logged':''}</span>
-        </div>
+        ${rows}
       </div>
     </div>`;
   }).join('');
@@ -1191,17 +1226,21 @@ function buildExercises(){
     b.addEventListener('click', () => { const i = +b.dataset.tick; done[i] = !done[i]; buildExercises(); }));
   $('exlist').querySelectorAll('[data-logw],[data-logr]').forEach(inp =>
     inp.addEventListener('change', () => {
-      const i = +(inp.dataset.logw ?? inp.dataset.logr);
+      const [i, si] = (inp.dataset.logw ?? inp.dataset.logr).split('-').map(Number);
       const row = list[i];
-      const wEl = $('exlist').querySelector(`[data-logw="${i}"]`);
-      const rEl = $('exlist').querySelector(`[data-logr="${i}"]`);
-      const w = parseFloat(wEl.value), r = parseInt(rEl.value, 10);
-      if(!isNaN(w) && !isNaN(r) && w > 0 && r > 0){
-        saveLog(row.n, w, r);
-        const tag = $('exlist').querySelector(`[data-logsaved="${i}"]`);
-        if(tag) tag.textContent = '✓ logged';
-        persist();
+      const n = setCountFor(row);
+      const sets = [];
+      for(let k = 0; k < n; k++){
+        const wEl = $('exlist').querySelector(`[data-logw="${i}-${k}"]`);
+        const rEl = $('exlist').querySelector(`[data-logr="${i}-${k}"]`);
+        const w = parseFloat(wEl.value), r = parseInt(rEl.value, 10);
+        const tag = $('exlist').querySelector(`[data-logsaved="${i}-${k}"]`);
+        if(!isNaN(w) && !isNaN(r) && w > 0 && r > 0){
+          sets.push({ w, r });
+          if(tag) tag.textContent = '✓';
+        } else if(tag) tag.textContent = '';
       }
+      saveExerciseSets(row.n, sets);
     }));
 
   const x = list[curEx];
