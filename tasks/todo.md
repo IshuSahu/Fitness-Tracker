@@ -1,89 +1,101 @@
-# Wire physique-os.html to Supabase + deploy prep
+# Set logging: latency, re-editing, single-row entry, warm-up/cool-down
 
 ## Context
-- Single-file HTML dashboard, currently in-memory only.
-- Supabase project already has `daily_logs`, `weight_logs`, `lift_logs` (RLS: own rows only).
-- Auth user `ishusahu593@gmail.com` created and email-confirmed directly via SQL
-  (project requires email confirmation; no way to click a confirmation link, so
-  confirmed it via `update auth.users set email_confirmed_at = now()`). Verified
-  signInWithPassword now succeeds.
-- No visual/markup changes beyond what's strictly needed for the login gate and
-  status chip text.
+Four problems found while using the tracker in the gym:
+1. Logging a set takes 3-4 seconds before the next can be entered.
+2. A logged set can never be corrected — rows disable themselves on save.
+3. No warm-up or cool-down guidance.
+4. Sets render as a vertical stack — too much scrolling/tapping on a phone.
 
-## Key design calls (flagging, not blocking on)
-- `meals`/`supplements` jsonb store as plain boolean arrays indexed to the
-  static WORKOUTS/meals/supps order (order never changes, so index-safe).
-- `sleep` jsonb: `{bed, wake, goal, quality}`.
-- `water_l` = filled glasses × glass size (target/glass-size themselves aren't
-  in the schema, stay client-side defaults).
-- `streak` persisted from the existing header input.
-- Fresh day (no `daily_logs` row): meals/supplements/water reset to
-  false/false/0 ("yesterday's ticks" per spec). Sleep fields and streak are
-  left at the page's built-in defaults (not fetched from anywhere, so this
-  falls out naturally without extra code) rather than force-zeroed, since
-  they're settings, not ticks, and zeroing streak would make the streak
-  counter meaningless.
-- Today's weight (`weight_logs` scoped, not `daily_logs`): if no row for
-  today, prefill with the most recent prior weight (better UX than a jarring
-  blank/zero on a "big number" display); daily_logs-triggered rollover rule
-  doesn't apply here since weight isn't a daily_logs field.
-- `lift_logs` has no unique constraint -> plain INSERT per saved set, per the
-  literal task wording. "Last time" and "today" lookups take the most recent
-  matching row.
-- Debounce: single shared 500ms debounce around the daily_logs upsert;
-  immediate flush on blur for text/number fields.
-- Retry: in-memory only (no localStorage queue) -- retries on `online` event
-  and a periodic timer until a write succeeds, per "don't crash, just won't
-  persist until connectivity returns."
+Confirmed: warm-up/cool-down are tick-off checklists only (nothing numeric
+stored), saving should feel instant/optimistic, a 4 × 8 exercise stops at 4.
+
+## Root causes
+- `post_set()` ran **11 sequential awaits** in one transaction (13 round-trips
+  with BEGIN/COMMIT). At ~250ms RTT to Supabase that is ~3.2s — matches the
+  reported lag exactly. Six queries were redundant or mergeable.
+- `set_index` was derived from a live `COUNT(*)`, so set 2 became unaddressable
+  once sets 3-4 existed. (`set_log` already had unique
+  `(session_id, exercise_id, set_index)` + an upsert — only the index
+  derivation blocked editing.)
+- `data-tick` was local-only; it never gated editability.
+- Sets always logged under today's real date, ignoring the date picker.
+- `auth.py` made a blocking sync HTTPS JWKS call on the event loop every 300s.
 
 ## Steps
-- [x] Add Supabase JS UMD script tag + init client (URL/anon key from this
-      conversation).
-- [x] Add login screen (email/password, card-styled, reuse gradient CTA
-      look), session check on load, small "Log out".
-- [x] Data layer: `loadAllFromSupabase()`, `tryPersistDaily()`/`persist`
-      (debounced), `tryPersistWeight()`/`persistWeight`, `saveLog()`/
-      `lastLog()`/`todayLog()` for lifts.
-- [x] Wire every existing control (meal ticks, water glasses, supplement
-      ticks, sleep fields incl. previously-unwired `slQual` and `streak`,
-      today's weight, lift weight/reps inputs) to the data layer. Goal
-      weight/date intentionally NOT persisted -- no column for them in the
-      given schema, and not in the task's explicit persistence list.
-- [x] Status chip: Saved / Saving… / Offline — will retry, reusing #saveChip.
-- [x] Lock-today's-log button: flushes the pending debounced write, shows a
-      2s confirmation state, no destructive action.
-- [x] Graceful degradation: try/catch around every Supabase call, section by
-      section in loadAllFromSupabase so one failed table doesn't block the
-      others; app stays interactive on failure.
-- [x] git init, .gitignore, commit (author = repo default per CLAUDE.md --
-      no AI attribution: verified global git user.name/user.email were
-      already IshuSahu / ishusahu593@gmail.com, left untouched).
-- [x] README.md (what it is, how to open locally, Render static-site deploy
-      steps).
-- [x] Push to https://github.com/IshuSahu/Fitness-Tracker.
-- [x] Verify in a real browser: logged in, ticked a meal, tapped a water
-      glass, ticked a supplement, logged a lift set, edited today's weight
-      -- all confirmed written to Supabase directly via psql. Reloaded the
-      page: session persisted (no re-login needed), and every one of those
-      values reloaded correctly (meal shows eaten, weight field shows 84.6,
-      lift inputs prefilled 35/9, water glass 1 filled, supplement ticked).
-      Logged out -> back to login screen; logged back in -> dashboard again.
-
-## Extra step not in the original list
-- Supabase Auth requires email confirmation by default, and no account
-  existed yet for ishusahu593@gmail.com. Created it via the public signup
-  endpoint, then confirmed the email directly via SQL
-  (`update auth.users set email_confirmed_at = now()`) since there's no way
-  to click a confirmation link from here. Verified signInWithPassword
-  succeeds. This wasn't one of the 8 listed tasks, but "with that set go
-  ahead and build" made it clearly in scope -- the login literally can't
-  work otherwise.
+- [x] `schemas.py`: `SetIn` gains optional `set_index` and `date`.
+- [x] `lifts.py`: use explicit `set_index` when given (falling back to the
+      count), and `body.date` for day_key/week_no/session upsert.
+- [x] `lifts.py`: drop the redundant exercise-existence check (FK covers it),
+      fold `was_first_set` + `consecutive_misses` into the final upsert's
+      DO UPDATE, merge the two rep-target lookups, TTL-cache the block row.
+      **Measured: 1,400ms -> 720ms warm (~49% faster); 11 awaits -> 5.**
+- [x] `lifts.py`: add `GET /api/sets?date=` — lift_state only holds the most
+      recent session, so it can't say what was logged on a *viewed* date once
+      backdating exists. Not in the original plan; the date feature is
+      incorrect in the UI without it.
+- [x] `auth.py`: move the blocking JWKS fetch off the event loop.
+- [x] Backend correctness: 21/21 checks pass against the live database
+      (in-place correction, date routing, misses/session-count semantics,
+      off-plan days, FK 404, concurrent distinct indexes).
+- [x] `index.html`: `PREP` constant — warm-up/cool-down checklists per session
+      type (push/pull/legs/recovery), rendered above and below the exercises.
+- [x] `index.html`: single-row set entry — "Set N of M", one kg × reps row,
+      Back/Next, progress dots, stop at target.
+- [x] `index.html`: optimistic save — advance immediately, POST in background,
+      revert + offline chip on failure.
+- [x] `index.html`: the per-exercise checkbox becomes the lock; unticking
+      re-opens editing any number of times.
+- [x] Verify: 21 backend checks against the live DB + 55 UI checks driving the
+      real page in jsdom. All pass.
+- [x] Confirm no test rows left in the database; the 09-16 session (11
+      exercises, 30 sets) is real user data and was not touched.
 
 ## Review
-Implementation is complete and verified end-to-end against the live
-Supabase project, not just read-through. The one open design call worth
-knowing about: on a fresh day (no `daily_logs` row yet), meals/supplements/
-water reset to blank per spec ("yesterday's ticks"), but sleep fields and
-streak are left at the page's built-in static defaults rather than force-
-zeroed -- they're settings/a running counter, not ticks, and zeroing streak
-every day would make the streak number meaningless. Flagged, not blocking.
+
+Done and verified. The four reported problems and what actually fixed them:
+
+**1. The 3-4s lag was real, not perceived.** `post_set()` made 13 network
+round-trips per set. Measured on this machine before the change: **1,400ms
+warm / 2,489ms cold**. After cutting it to 5 queries: **720ms warm**. On top
+of that the UI no longer waits for the response at all, so the perceived cost
+is now zero — the set marks done and the counter advances on click, and the
+POST settles in the background. A failed save rolls the set back and shows the
+offline chip rather than leaving it looking saved.
+
+**2. Re-editing.** The blocker was `set_index` being derived from a live
+`COUNT(*)`, which made set 2 unaddressable once 3 and 4 existed. `SetIn` now
+takes an explicit `set_index`; the pre-existing unique constraint and upsert
+did the rest. The tick-box is now the lock and nothing else auto-disables, so
+any set can be corrected any number of times until you choose to lock it.
+
+**3. Warm-up / cool-down** are frontend constants, not database rows —
+they carry no sets, load or e1RM, so pushing them through
+`session_template`/`PlanExercise` would have meant inventing catalog entries
+for data that never varies. If per-day customisation is ever wanted, that's
+when it earns a table.
+
+**4. Single-row entry** replaces the stacked rows: "Set N of M", one kg × reps
+line, Back/Next, progress dots, stops at the programmed count.
+
+### Worth knowing
+
+- **Lock state is per-session UI state, not persisted.** A refresh returns
+  every exercise to editable. No logged data is ever lost — only the lock
+  flag resets. This is deliberately more permissive, matching the request.
+- **`GET /api/sets?date=` was added beyond the plan.** `lift_state` only ever
+  holds the most recently written session, so once backdating exists it cannot
+  answer "what did I log on the date I'm looking at". Without this endpoint the
+  date picker would have shown the wrong sets. The UI now reads logged sets
+  from `set_log` for the viewed date and uses `lift_state` only for the
+  "Last time" reference.
+- **Next refuses to advance on an empty set.** Found while writing the tests:
+  skipping a set then logging the next one would have left a gap in the set
+  indexes and crashed the locked summary on a sparse array. Next now requires
+  a valid entry and focuses the offending input instead.
+- **Not verified in a real browser.** jsdom drives the actual page code and
+  all 55 assertions pass, but that is not the same as rendering — the CSS
+  (dots, nav buttons, collapsible panels) has not been looked at on a real
+  screen or at phone width. Worth a visual pass.
+- `session_template` still has no DDL in the repo; unchanged by this work but
+  still worth capturing in a migration.

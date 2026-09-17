@@ -1,6 +1,7 @@
 from __future__ import annotations
+import datetime as dt
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DailyOut(BaseModel):
@@ -75,6 +76,12 @@ class SetIn(BaseModel):
     exercise_id: str
     weight_kg: Optional[float] = None
     reps: int
+    # Explicit index lets an already-logged set be corrected in place. Without
+    # it the server appends, deriving the index from a live count -- which also
+    # races when two sets are posted in quick succession.
+    set_index: Optional[int] = Field(None, ge=0)
+    # The date the set belongs to; day_key and week_no are derived from it.
+    date: Optional[dt.date] = None
 
 
 class CoachUpdateEntry(BaseModel):

@@ -191,13 +191,49 @@ input,select{font-family:inherit;color:var(--txt)}
 .exmeta{font-size:11.5px;color:var(--dim);margin-top:3px}
 .exmeta em{font-style:normal;color:var(--gold)}
 .exalt{font-size:11px;color:var(--dim2);margin-top:4px}
-.logrow{display:flex;align-items:center;gap:6px;margin-top:6px}
-.logset{width:14px;flex:none;font-size:10.5px;color:var(--dim2);text-align:center}
+.logrow{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+.logset{flex:none;font-size:10.5px;color:var(--dim2);min-width:58px}
 .loginp{width:60px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;
   padding:5px 7px;font-size:12.5px;font-family:'Space Grotesk',sans-serif}
 .loginp:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.loginp:disabled{opacity:.5}
 .logx{font-size:11px;color:var(--dim2)}
 .logsaved{font-size:12px;color:var(--green);width:14px}
+
+/* single-row set navigator */
+.navbtn{
+  border:1px solid var(--line2);background:rgba(255,255,255,.05);border-radius:8px;
+  padding:5px 10px;font-size:11.5px;font-family:'Space Grotesk',sans-serif;
+  color:var(--txt);cursor:pointer;transition:.15s;
+}
+.navbtn:hover:not(:disabled){background:rgba(255,255,255,.1);border-color:var(--gold)}
+.navbtn:disabled{opacity:.35;cursor:default}
+.navbtn.primary{border-color:rgba(255,194,75,.5);background:rgba(255,194,75,.14);color:var(--gold)}
+.navbtn.primary:hover:not(:disabled){background:rgba(255,194,75,.24)}
+.dots{display:flex;gap:4px;align-items:center;margin-left:auto}
+.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.16)}
+.dot.filled{background:var(--green)}
+.dot.cur{box-shadow:0 0 0 2px rgba(255,194,75,.45);background:var(--gold)}
+.setsum{font-size:11px;color:var(--dim);margin-top:6px}
+.setsum b{color:var(--txt);font-weight:500}
+.pending{font-size:10.5px;color:var(--dim2);margin-left:4px}
+.failed{font-size:10.5px;color:var(--ember);margin-left:4px}
+
+/* warm-up / cool-down checklists */
+.prep{border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);
+  padding:10px 12px;margin-bottom:10px}
+.prep.cool{margin:10px 0 0}
+.prep-h{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+  font-family:'Space Grotesk',sans-serif;font-size:12.5px}
+.prep-h .cnt{margin-left:auto;font-size:11px;color:var(--dim)}
+.prep-h .caret{font-size:10px;color:var(--dim2);transition:transform .18s}
+.prep[data-open="false"] .caret{transform:rotate(-90deg)}
+.prep[data-open="false"] .prep-b{display:none}
+.prep-b{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.prep-i{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;line-height:1.35}
+.prep-i.on{opacity:.5}
+.prep-i.on .pn{text-decoration:line-through;text-decoration-color:var(--dim2)}
+.prep-i .pd{color:var(--dim);font-size:11px}
 
 .stage{
   border:1px solid var(--line);border-radius:14px;
@@ -483,8 +519,10 @@ input,select{font-family:inherit;color:var(--txt)}
     <div class="days" id="days" role="group" aria-label="Choose a training day"></div>
     <div class="sess">
       <div>
+        <div id="warmup"></div>
         <div class="exlist" id="exlist"></div>
         <p class="note" id="exProgress">0 of 8 done</p>
+        <div id="cooldown"></div>
       </div>
       <div class="stage">
         <div class="stage-t" id="stageName">Pick an exercise</div>
@@ -751,9 +789,19 @@ setInterval(retryAll, 10000);
 let LIFT_STATE = {};   // exercise_id -> {last_date, last_sets:[{load_kg,reps}], consecutive_misses, best_e1rm_kg, best_e1rm_date, sessions_logged}
 let PLAN_EXERCISES = [];   // current day's plan, from GET /api/plan/{day_key}
 
+// Sets actually logged on the viewed date. lift_state only ever holds the
+// most recently written session, so it can't answer "what did I log on this
+// date" once any backdating is in play -- this comes from set_log directly.
+let DAY_SETS = {};
+
 async function loadLiftState(){
   try{ LIFT_STATE = await api('/api/lift-state'); }
   catch(e){ console.warn('lift-state load failed', e); }
+}
+
+async function loadDaySets(date){
+  try{ DAY_SETS = await api('/api/sets?date=' + date); }
+  catch(e){ console.warn('day sets load failed', e); DAY_SETS = {}; }
 }
 
 async function loadPlan(dayKey){
@@ -811,8 +859,7 @@ async function loadDailyAndWeight(date){
 
 async function loadAllFromApi(){
   await loadDailyAndWeight(viewDate);
-  await loadLiftState();
-  await loadPlan(curDay);
+  await Promise.all([loadLiftState(), loadDaySets(viewDate), loadPlan(curDay)]);
 }
 
 /* =======================================================
@@ -873,6 +920,76 @@ const DAYS = [
  {k:"sun", lbl:"Sun · Legs B",   name:"Sun · Legs B — hamstrings, glutes, core"}
 ];
 const DOW = ['sun','mon','tue','wed','thu','fri','sat'];
+
+// Warm-up / cool-down are fixed reference content, not exercises -- no sets,
+// load or e1RM -- so they're a checklist here rather than session_template
+// rows. Ticks are per-session UI state, like doneMap.
+const PREP_FOR = {mon:'push', fri:'push', tue:'pull', sat:'pull', wed:'legs', sun:'legs', thu:'recovery'};
+const PREP = {
+  push:{
+    warm:[
+      ['Easy cardio','5 min bike or brisk treadmill — just raise core temp'],
+      ['Arm circles','15 forward, 15 backward'],
+      ['Band pull-aparts','2 × 15 — rear delts, balances all the pressing'],
+      ['Shoulder dislocates','10 slow, band or stick'],
+      ['Scapular push-ups','2 × 10 — serratus, protects the shoulder under load'],
+      ['Ramp-up set','1 × 10 at ~40% of your first working weight'],
+    ],
+    cool:[
+      ['Doorway pec stretch','30s each side'],
+      ['Cross-body rear delt stretch','30s each side'],
+      ['Overhead triceps stretch','30s each side'],
+      ['Child’s pose with lat reach','45s'],
+      ['Thoracic extension over a bench','30s'],
+      ['Easy walk + nasal breathing','3 min'],
+    ]},
+  pull:{
+    warm:[
+      ['Easy cardio','5 min'],
+      ['Band pull-aparts','2 × 15'],
+      ['Dead hang or scapular pull-ups','2 × 8, or 2 × 20s hang'],
+      ['Cat-cow','10 slow — spine prep before rowing'],
+      ['Band face pulls','2 × 15 — external rotation, rear delts'],
+      ['Ramp-up set','1 × 12 at ~40% on your first pulldown or row'],
+    ],
+    cool:[
+      ['Lat stretch off the rack','30s each side'],
+      ['Seated forward fold','45s — hamstrings and low back after rows'],
+      ['Child’s pose with lat reach','45s'],
+      ['Biceps/forearm stretch on a wall','30s each side'],
+      ['Thread-the-needle rotation','30s each side'],
+      ['Easy walk + breathing','3 min'],
+    ]},
+  legs:{
+    warm:[
+      ['Easy cardio','5 min on the bike — preferred over treadmill here'],
+      ['Leg swings','12 each leg, front-back and side-side'],
+      ['Bodyweight squats','2 × 12 — groove the pattern'],
+      ['Glute bridges','2 × 15 — glute activation before loading'],
+      ['Walking lunges','10 each leg'],
+      ['Ramp-up set','1 × 10 empty bar or light goblet at ~40%'],
+    ],
+    cool:[
+      ['Standing quad stretch','30s each side'],
+      ['Seated hamstring stretch','30s each side'],
+      ['Couch stretch (hip flexor)','45s each side'],
+      ['Figure-4 glute stretch','30s each side'],
+      ['Calf stretch on a wall or step','30s each side'],
+      ['Easy walk + breathing','3 min'],
+    ]},
+  recovery:{
+    warm:[
+      ['Easy walk','5 min'],
+      ['Cat-cow','10 slow'],
+      ['Leg swings','12 each leg'],
+    ],
+    // the day is already mobility work, so it closes with the legs cool-down
+    cool:null},
+};
+function prepFor(dayKey){
+  const p = PREP[PREP_FOR[dayKey]] || PREP.push;
+  return {warm: p.warm, cool: p.cool || PREP.legs.cool};
+}
 
 // Exercise data (sets/reps/cue/alt/anim/muscles) now comes from
 // GET /api/plan/{day_key} -- see PLAN_EXERCISES / loadPlan() above.
@@ -1081,17 +1198,119 @@ function buildDays(){
   $('days').innerHTML = DAYS.map(d =>
     `<button class="day${d.k===todayK?' today':''}" data-day="${d.k}" aria-pressed="${d.k===curDay}">${d.lbl}</button>`).join('');
   $('days').querySelectorAll('.day').forEach(b => b.addEventListener('click', async () => {
-    curDay = b.dataset.day; curEx = 0; buildDays();
+    curDay = b.dataset.day; curEx = 0; buildDays(); buildPrep();
     await loadPlan(curDay);
     buildExercises();
   }));
 }
 
-// A set can only ever be appended (POST /api/sets computes set_index from a
-// live count server-side -- there's no way to target-update an earlier
-// index). So only the next not-yet-logged set is editable; logged ones show
-// read-only. This is a deliberate change from the previous freely-editable
-// grid, forced by that endpoint's contract.
+// One set on screen at a time: the cursor row shows set N of M with Back/Next.
+// Next commits that set by explicit index, so any earlier set can be corrected
+// in place. The per-exercise tick is the lock -- untick it and everything is
+// editable again, as many times as needed.
+const setCursor = {};        // exercise_id -> which set index is on screen
+const failedSaves = {};      // "exercise_id-index" -> true, save that didn't land
+
+// Cursors are positions within a given date's sets, so a date change retires
+// them; they re-derive from that date's logged sets on the next render.
+function clearSetCursors(){
+  for(const k in setCursor) delete setCursor[k];
+  for(const k in failedSaves) delete failedSaves[k];
+}
+
+// Defaults to the first unlogged set, clamped to the programmed count.
+function curSetOf(x){
+  const cur = setCursor[x.exercise_id];
+  const n = cur == null ? (DAY_SETS[x.exercise_id] || []).length : cur;
+  return Math.max(0, Math.min(n, x.sets - 1));
+}
+
+function saveSet(x, idx, w, r){
+  const arr = (DAY_SETS[x.exercise_id] || []).slice();
+  const before = arr[idx];
+  arr[idx] = {load_kg: w, reps: r};
+  DAY_SETS[x.exercise_id] = arr;
+  const key = x.exercise_id + '-' + idx;
+  delete failedSaves[key];
+  setStatus('saving');
+  // deliberately not awaited: the UI has already advanced
+  api('/api/sets', {
+    method: 'POST',
+    body: JSON.stringify({
+      exercise_id: x.exercise_id, weight_kg: w, reps: r,
+      set_index: idx, date: viewDate,
+    }),
+  }).then(st => {
+    LIFT_STATE[x.exercise_id] = st;
+    setStatus('saved');
+  }).catch(() => {
+    const cur = DAY_SETS[x.exercise_id];
+    if(before !== undefined) cur[idx] = before;
+    else cur.splice(idx, 1);   // a brand-new set is always the last one
+    failedSaves[key] = true;
+    setStatus('offline');
+    buildExercises();
+  });
+}
+
+// Reads the on-screen inputs for exercise `i` and saves if valid and changed.
+// Returns false when there's nothing valid on screen, which is what stops Next
+// from skipping a set -- skipping would leave a gap in the set indexes.
+function commitCurrent(i, cur){
+  const x = PLAN_EXERCISES[i];
+  const rEl = $('exlist').querySelector(`[data-logr="${i}"]`);
+  if(!rEl) return false;
+  const r = parseInt(rEl.value, 10);
+  let w = null;
+  if(x.mode === 'load'){
+    const wEl = $('exlist').querySelector(`[data-logw="${i}"]`);
+    w = parseFloat(wEl.value);
+    if(isNaN(w) || w <= 0) return false;
+  }
+  if(isNaN(r) || r <= 0) return false;
+  const prev = (DAY_SETS[x.exercise_id] || [])[cur];
+  const unchanged = prev && prev.reps === r && prev.load_kg === w;
+  if(!unchanged) saveSet(x, cur, w, r);
+  return true;
+}
+
+const prepDone = {};                             // "dayKey-kind-index" -> ticked
+const prepOpen = {warm:true, cool:false};        // cool-down starts collapsed
+
+function buildPrep(){
+  const p = prepFor(curDay);
+  const render = (kind, title, items, el) => {
+    const n = items.filter((_,i) => prepDone[`${curDay}-${kind}-${i}`]).length;
+    el.innerHTML = `
+      <div class="prep${kind==='cool'?' cool':''}" data-open="${prepOpen[kind]}">
+        <div class="prep-h" role="button" tabindex="0" data-toggle="${kind}" aria-expanded="${prepOpen[kind]}">
+          <span class="caret">▾</span><span>${title}</span>
+          <span class="cnt">${n}/${items.length}</span>
+        </div>
+        <div class="prep-b">${items.map((it,i) => {
+          const on = !!prepDone[`${curDay}-${kind}-${i}`];
+          return `<div class="prep-i${on?' on':''}">
+            <button class="tick" aria-pressed="${on}" data-prep="${kind}-${i}" aria-label="Mark ${it[0]} done">✓</button>
+            <div><div class="pn">${it[0]}</div><div class="pd">${it[1]}</div></div>
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    el.querySelectorAll('[data-prep]').forEach(b => b.addEventListener('click', () => {
+      const key = `${curDay}-${b.dataset.prep}`;
+      prepDone[key] = !prepDone[key];
+      buildPrep();
+    }));
+    const h = el.querySelector('[data-toggle]');
+    const toggle = () => { prepOpen[kind] = !prepOpen[kind]; buildPrep(); };
+    h.addEventListener('click', toggle);
+    h.addEventListener('keydown', e => {
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }
+    });
+  };
+  render('warm', 'Warm-up', p.warm, $('warmup'));
+  render('cool', 'Cool-down', p.cool, $('cooldown'));
+}
+
 function buildExercises(){
   const list = PLAN_EXERCISES;
   doneMap[curDay] = doneMap[curDay] || list.map(() => false);
@@ -1103,27 +1322,48 @@ function buildExercises(){
   }
   $('exlist').innerHTML = list.map((x,i) => {
     const st = LIFT_STATE[x.exercise_id];
-    const isToday = st && st.last_date === todayISO();
-    const doneSets = isToday ? (st.last_sets || []) : [];
-    const lastRef = (!isToday && st && st.last_sets && st.last_sets.length) ? st.last_sets[0] : null;
+    const logged = DAY_SETS[x.exercise_id] || [];
+    const locked = done[i];
     const showKg = x.mode === 'load';
     const unitLabel = x.mode === 'time' ? 'sec' : 'reps';
-    const rows = Array.from({length:x.sets}, (_,si) => {
-      const set = doneSets[si];
-      const isDone = !!set;
-      const isActive = si === doneSets.length;
-      return `<div class="logrow">
-          <span class="logset">${si+1}</span>
-          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0" value="${isDone && set.load_kg!=null?set.load_kg:''}"
-            data-logw="${i}-${si}" ${isDone||!isActive?'disabled':''} ${showKg?'':'style="display:none"'}
-            aria-label="Weight for set ${si+1} of ${x.name} in kg">
+    const lastRef = (!logged.length && st && st.last_date && st.last_date !== viewDate
+                     && st.last_sets && st.last_sets.length) ? st.last_sets[0] : null;
+
+    const cur = curSetOf(x);
+    const set = logged[cur];
+    const complete = logged.length >= x.sets;
+    const failed = failedSaves[x.exercise_id + '-' + cur];
+
+    const dots = Array.from({length:x.sets}, (_,si) =>
+      `<span class="dot${si < logged.length ? ' filled' : ''}${si === cur && !locked ? ' cur' : ''}"></span>`).join('');
+
+    let body;
+    if(locked){
+      const summary = logged.length
+        ? logged.map(s => showKg && s.load_kg != null ? `${s.load_kg}×${s.reps}` : `${s.reps}${showKg?'':' '+unitLabel}`).join(' · ')
+        : 'nothing logged';
+      body = `<div class="setsum">Locked — <b>${summary}</b>. Untick to edit.</div>`;
+    }else{
+      body = `
+        <div class="logrow">
+          <span class="logset">Set ${cur+1} of ${x.sets}</span>
+          <input type="number" class="loginp" placeholder="kg" step="0.5" min="0"
+            value="${set && set.load_kg != null ? set.load_kg : ''}"
+            data-logw="${i}" ${showKg?'':'style="display:none"'}
+            aria-label="Weight for set ${cur+1} of ${x.name} in kg">
           ${showKg?'<span class="logx">×</span>':''}
-          <input type="number" class="loginp" placeholder="${unitLabel}" step="1" min="0" value="${isDone?set.reps:''}"
-            data-logr="${i}-${si}" ${isDone||!isActive?'disabled':''}
-            aria-label="${unitLabel==='sec'?'Seconds':'Reps'} for set ${si+1} of ${x.name}">
-          <span class="logsaved" data-logsaved="${i}-${si}">${isDone?'✓':''}</span>
+          <input type="number" class="loginp" placeholder="${unitLabel}" step="1" min="0"
+            value="${set ? set.reps : ''}" data-logr="${i}"
+            aria-label="${unitLabel==='sec'?'Seconds':'Reps'} for set ${cur+1} of ${x.name}">
+          <span class="dots" aria-hidden="true">${dots}</span>
+        </div>
+        <div class="logrow">
+          <button class="navbtn" data-back="${i}" ${cur === 0 ? 'disabled' : ''}>&lsaquo; Back</button>
+          <button class="navbtn primary" data-next="${i}" ${complete && cur === x.sets-1 ? 'disabled' : ''}>
+            ${complete && cur === x.sets-1 ? 'Complete ✓' : 'Next ›'}</button>
+          ${failed ? '<span class="failed">not saved — check connection</span>' : ''}
         </div>`;
-    }).join('');
+    }
     const overrideBits = [];
     if(x.override_load_kg != null) overrideBits.push(`aim for ${x.override_load_kg} kg`);
     overrideBits.push(x.override_note || 'load/rep target adjusted this week');
@@ -1139,37 +1379,38 @@ function buildExercises(){
           ${x.overridden?`<div class="exalt" style="color:var(--gold)">Coach update: ${overrideBits.join(' · ')}</div>`:''}
         </button>
         ${lastRef?`<div class="exalt" style="color:var(--gold)">Last time: ${showKg&&lastRef.load_kg!=null?lastRef.load_kg+' kg × ':''}${lastRef.reps}${showKg?'':' '+unitLabel}${st.last_date?` (${st.last_date})`:''}</div>`:''}
-        ${rows}
+        ${body}
       </div>
     </div>`;
   }).join('');
   $('exlist').querySelectorAll('[data-pick]').forEach(b =>
     b.addEventListener('click', () => { curEx = +b.dataset.pick; buildExercises(); }));
   $('exlist').querySelectorAll('[data-tick]').forEach(b =>
-    b.addEventListener('click', () => { const i = +b.dataset.tick; done[i] = !done[i]; buildExercises(); }));
-  $('exlist').querySelectorAll('[data-logw]:not([disabled]),[data-logr]:not([disabled])').forEach(inp =>
-    inp.addEventListener('change', async () => {
-      const [i, si] = (inp.dataset.logw ?? inp.dataset.logr).split('-').map(Number);
-      const ex = list[i];
-      const rEl = $('exlist').querySelector(`[data-logr="${i}-${si}"]`);
-      const r = parseInt(rEl.value, 10);
-      const needsWeight = ex.mode === 'load';
-      let w = null;
-      if(needsWeight){
-        const wEl = $('exlist').querySelector(`[data-logw="${i}-${si}"]`);
-        w = parseFloat(wEl.value);
-        if(isNaN(w) || w <= 0) return;
+    b.addEventListener('click', () => {
+      const i = +b.dataset.tick;
+      // locking commits whatever is on screen first, so a typed-but-not-
+      // advanced final set isn't silently dropped
+      if(!done[i]) commitCurrent(i, curSetOf(list[i]));
+      done[i] = !done[i];
+      buildExercises();
+    }));
+  $('exlist').querySelectorAll('[data-next]').forEach(b =>
+    b.addEventListener('click', () => {
+      const i = +b.dataset.next, x = list[i], cur = curSetOf(x);
+      if(!commitCurrent(i, cur)){
+        const wEl = $('exlist').querySelector(`[data-logw="${i}"]`);
+        const rEl = $('exlist').querySelector(`[data-logr="${i}"]`);
+        (x.mode === 'load' && !wEl.value ? wEl : rEl).focus();
+        return;
       }
-      if(isNaN(r) || r <= 0) return;
-      setStatus('saving');
-      try{
-        const st = await api('/api/sets', {
-          method: 'POST',
-          body: JSON.stringify({ exercise_id: ex.exercise_id, weight_kg: w, reps: r }),
-        });
-        LIFT_STATE[ex.exercise_id] = st;
-        setStatus('saved');
-      }catch(e){ setStatus('offline'); }
+      if(cur + 1 < x.sets) setCursor[x.exercise_id] = cur + 1;
+      buildExercises();
+    }));
+  $('exlist').querySelectorAll('[data-back]').forEach(b =>
+    b.addEventListener('click', () => {
+      const i = +b.dataset.back, x = list[i], cur = curSetOf(x);
+      commitCurrent(i, cur);
+      setCursor[x.exercise_id] = Math.max(0, cur - 1);
       buildExercises();
     }));
 
@@ -1384,16 +1625,18 @@ function paintDaily(){
   paintWeight(); paintSpark(); paintSleep();
 }
 function paintAll(){
-  buildDays(); buildExercises(); paintDaily(); countUp();
+  buildDays(); buildPrep(); buildExercises(); paintDaily(); countUp();
 }
 
 $('viewDateIn').addEventListener('change', async () => {
   viewDate = $('viewDateIn').value || todayISO();
   curDay = dayKeyForISO(viewDate);
   curEx = 0;
+  clearSetCursors();
   buildDays();
   await loadDailyAndWeight(viewDate);
-  await loadPlan(curDay);
+  await Promise.all([loadDaySets(viewDate), loadPlan(curDay)]);
+  buildPrep();
   buildExercises();
   paintDaily();
 });
