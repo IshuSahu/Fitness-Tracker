@@ -222,14 +222,12 @@ input,select{font-family:inherit;color:var(--txt)}
 /* reassign-the-day + swap-an-exercise controls */
 .swaprow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
 .swaprow label{font-size:11.5px;color:var(--dim)}
+.day:disabled{opacity:.5;cursor:default}
 .swaprow .note{margin:0;font-size:11px;flex-basis:100%}
 .swapsel{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;
   padding:5px 7px;font-size:11.5px;color:var(--txt);font-family:'Space Grotesk',sans-serif;max-width:100%}
 .swapsel:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
 .swapsel:disabled{opacity:.45}
-#dayPlanIn{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;
-  padding:5px 7px;font-size:11.5px;color:var(--txt);font-family:'Space Grotesk',sans-serif}
-#dayPlanIn:disabled{opacity:.45}
 .exswap{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
 .swapped-tag{font-size:10.5px;color:var(--gold)}
 
@@ -609,8 +607,6 @@ input,select{font-family:inherit;color:var(--txt)}
     </div>
     <div class="days" id="days" role="group" aria-label="Choose a training day"></div>
     <div class="swaprow">
-      <label for="dayPlanIn">Workout for this date</label>
-      <select id="dayPlanIn" aria-describedby="dayPlanNote"></select>
       <button class="navbtn" id="dayPlanReset" type="button">Reset to weekday</button>
       <span class="note" id="dayPlanNote"></span>
     </div>
@@ -921,17 +917,15 @@ async function loadDayPlan(date){
 }
 
 function paintDayPlan(){
-  const sel = $('dayPlanIn'), reset = $('dayPlanReset');
-  sel.innerHTML = DAYS.map(d =>
-    `<option value="${d.k}"${d.k === curDay ? ' selected' : ''}>${d.lbl}</option>`).join('');
-  sel.disabled = reset.disabled = DAY_PLAN.locked;
-  reset.style.display = DAY_PLAN.source === 'override' ? '' : 'none';
+  const reset = $('dayPlanReset');
+  reset.disabled = DAY_PLAN.locked;
+  reset.style.display = DAY_PLAN.source === 'override' && !DAY_PLAN.locked ? '' : 'none';
   const weekdayLbl = DAYS.find(d => d.k === dayKeyForISO(viewDate)).lbl;
   $('dayPlanNote').textContent = DAY_PLAN.locked
     ? 'Sets are logged for this date, so its workout is settled.'
     : DAY_PLAN.source === 'override'
       ? `Moved here — this date would normally be ${weekdayLbl}.`
-      : 'Missed a session? Pick it here to run it on this date instead.';
+      : 'Missed a session? Pick another day above to run it on this date instead.';
 }
 
 async function setDayPlan(dayKey){
@@ -957,7 +951,6 @@ async function setDayPlan(dayKey){
   setStatus('saved');
 }
 
-$('dayPlanIn').addEventListener('change', () => setDayPlan($('dayPlanIn').value));
 $('dayPlanReset').addEventListener('click', () => setDayPlan(dayKeyForISO(viewDate)));
 
 async function loadPlan(dayKey){
@@ -1462,12 +1455,14 @@ function buildDays(){
   const todayK = DOW[new Date().getDay()];
   $('days').innerHTML = DAYS.map(d =>
     `<button class="day${d.k===todayK?' today':''}" data-day="${d.k}" aria-pressed="${d.k===curDay}">${d.lbl}</button>`).join('');
-  $('days').querySelectorAll('.day').forEach(b => b.addEventListener('click', async () => {
-    curDay = b.dataset.day; curEx = 0; clearSetCursors();
-    buildDays(); paintDayPlan(); buildPrep();
-    await loadPlan(curDay);
-    buildExercises();
-  }));
+  // Picking a day IS reassigning this date's workout. Previously a tab only
+  // changed what was displayed, so a set logged while viewing another day's
+  // programme was filed under the date's real one -- against an exercise that
+  // session didn't even contain.
+  $('days').querySelectorAll('.day').forEach(b => {
+    b.disabled = DAY_PLAN.locked;
+    b.addEventListener('click', () => setDayPlan(b.dataset.day));
+  });
 }
 
 // One set on screen at a time: the cursor row shows set N of M with Back/Next.

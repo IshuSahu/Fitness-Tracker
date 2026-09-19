@@ -68,4 +68,56 @@ Four asks, all about rigidity — plus one real bug found while researching them
 - [x] Clean up all test rows.
 
 ## Review
-_(to be written when the unit of work is finished)_
+
+All four shipped and verified. 189 checks across seven suites, all passing:
+53 against the live database, 136 driving the real page in jsdom.
+
+**1. Honest boot.** The complaint was cosmetic; the cause wasn't. The page
+revealed itself *before the first fetch started*, and every loader swallowed
+its error, so with the server down you got a complete, plausible dashboard --
+85.4 kg, a downward sparkline, a 12-day streak -- under a green "Saved
+locally" chip. The headline weight was a hardcoded `data-count="85.4"` that no
+code ever updated, so it read 85.4 no matter what you'd logged. The dashboard
+now appears only once real data is in hand, `/health` actually runs `select 1`,
+and failure states distinguish an unreachable server from a reachable one that
+can't get to the database. Every fabricated default is gone.
+
+**2. Meal options.** Each of the six slots carries 4-5 alternatives that hit
+roughly the same macros, so swapping never quietly wrecks the day's totals.
+All vegetarian, no egg -- asserted by a test so it stays that way. Where a
+variant genuinely can't match, it says so: the curd-and-honey post-workout
+option is labelled the low-protein fallback, and "Skip tonight" is a real
+zero-calorie choice rather than a box left untouched.
+
+**3. Reassigning a date's workout.** One row per date in `day_plan`, so
+reverting is deleting the row and swapping two days is two rows. `post_set`
+resolves `day_key` the same way, so a set logged on a reassigned day is filed
+under the programme actually being run. Locked once any set exists, per the
+stated rule.
+
+**4. Substituting an exercise.** Per date, per slot, in `exercise_swap` --
+`session_template` is never touched. Alternatives are derived from the
+catalogue: shared `muscles` entries plus matching `kind`, excluding anything
+already programmed that day.
+
+### Worth knowing
+
+- **The day tabs now reassign the date, not just preview it.** Built as two
+  separate controls first, which created a footgun: clicking a tab showed
+  another programme's exercises, but a set logged there was filed under the
+  date's *real* programme, against an exercise that session didn't contain.
+  Unified to one control -- picking a day IS choosing what you're doing.
+  The redundant select was removed.
+- **`loadDayPlan` validates the `day_key` it receives.** `curDay` drives every
+  subsequent render; an unusable value took the whole session card down. Found
+  because a test harness returned an empty object.
+- **Not verified in a real browser.** jsdom drives the actual page code, but
+  that tests behaviour, not rendering. The skeleton shimmer, the new selects
+  and the disabled day tabs have not been looked at on a real screen or at
+  phone width.
+- Migrations 002-004 are applied to the live database; existing rows were
+  preserved and verified.
+- `coach.py`'s swap is still a loaded gun -- permanent, global, no undo,
+  ignores the `week_no` it accepts. Unused by the UI. The new per-date swap is
+  what it should be rebuilt on if anything ever calls it.
+- `session_template` still has no DDL in the repo.
