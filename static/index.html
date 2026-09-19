@@ -106,13 +106,23 @@ h1,h2,h3{margin:0;font-family:'Space Grotesk',sans-serif;font-weight:600;letter-
 button{font-family:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:8px}
 input,select{font-family:inherit;color:var(--txt)}
+/* The native dropdown list is painted by the OS, not the page, so it ignores
+   the card styling above and falls back to black-on-white. color-scheme tells
+   the platform to draw its own dark variant; the explicit option colours cover
+   the platforms that don't honour it. */
+select{color-scheme:dark}
+select option{background-color:#141A2B;color:var(--txt)}
+select option:checked{background-color:#23304d}
+select option:disabled{color:var(--dim2)}
 .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
 .fld label{font-size:10.5px;color:var(--dim2)}
 .fld input,.fld select{
   background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:9px;
   padding:7px 9px;font-size:13px;font-family:'Space Grotesk',sans-serif;width:100%;
 }
-.fld input:focus,.fld select:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.fld select{background:#141A2B}
+.fld input:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.fld select:focus{border-color:var(--gold);background:#1b2438}
 .bar{height:7px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
 .bar i{display:block;height:100%;width:0;border-radius:99px;transition:width .85s var(--ease)}
 
@@ -224,9 +234,9 @@ input,select{font-family:inherit;color:var(--txt)}
 .swaprow label{font-size:11.5px;color:var(--dim)}
 .day:disabled{opacity:.5;cursor:default}
 .swaprow .note{margin:0;font-size:11px;flex-basis:100%}
-.swapsel{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;
+.swapsel{background:#141A2B;border:1px solid var(--line);border-radius:8px;
   padding:5px 7px;font-size:11.5px;color:var(--txt);font-family:'Space Grotesk',sans-serif;max-width:100%}
-.swapsel:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.swapsel:focus{border-color:var(--gold);background:#1b2438}
 .swapsel:disabled{opacity:.45}
 .exswap{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
 .swapped-tag{font-size:10.5px;color:var(--gold)}
@@ -300,10 +310,10 @@ input,select{font-family:inherit;color:var(--txt)}
 .meal.eaten{background:rgba(74,222,128,.055);border-color:rgba(74,222,128,.22)}
 .meal-b{flex:1;min-width:0}
 .meal-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
-.meal-sel{width:100%;margin-top:7px;background:rgba(255,255,255,.05);border:1px solid var(--line);
+.meal-sel{width:100%;margin-top:7px;background:#141A2B;border:1px solid var(--line);
   border-radius:8px;padding:5px 7px;font-size:11.5px;color:var(--txt);
   font-family:'Space Grotesk',sans-serif}
-.meal-sel:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.meal-sel:focus{border-color:var(--gold);background:#1b2438}
 .meal.eaten .meal-sel{opacity:.6}
 .meal-n{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:500}
 .meal-t{font-size:11px;color:var(--gold);font-family:'Space Grotesk',sans-serif}
@@ -679,8 +689,8 @@ input,select{font-family:inherit;color:var(--txt)}
       </div>
     </div>
     <div class="sgrid">
-      <div class="fld"><label for="bed">Bedtime</label><input id="bed" type="time" value="00:05"></div>
-      <div class="fld"><label for="wake">Wake-up</label><input id="wake" type="time" value="06:45"></div>
+      <div class="fld"><label for="bed">Bedtime</label><input id="bed" type="time"></div>
+      <div class="fld"><label for="wake">Wake-up</label><input id="wake" type="time"></div>
       <div class="fld"><label for="slGoal">Sleep goal (h)</label><input id="slGoal" type="number" value="7.5" min="5" max="10" step="0.25"></div>
       <div class="fld"><label for="slQual">Sleep quality</label>
         <select id="slQual">
@@ -690,22 +700,10 @@ input,select{font-family:inherit;color:var(--txt)}
     </div>
     <div>
       <div class="tag" style="margin-bottom:4px">Last 7 nights vs goal</div>
+      <p class="note" id="slHint" style="margin:6px 0 0"></p>
       <div class="sbars" id="sbars"><div class="goalline" id="goalline"></div></div>
     </div>
-    <div style="margin-top:14px">
-      <div class="tag">Estimated stage split</div>
-      <div class="stages">
-        <i style="width:18%;background:#6D4AEA"></i>
-        <i style="width:21%;background:var(--violet)"></i>
-        <i style="width:61%;background:rgba(167,139,250,.35)"></i>
-      </div>
-      <div class="slegend">
-        <span><s style="background:#6D4AEA"></s>Deep 18%</span>
-        <span><s style="background:var(--violet)"></s>REM 21%</span>
-        <span><s style="background:rgba(167,139,250,.35)"></s>Light 61%</span>
-      </div>
-    </div>
-    <p class="note">These are placeholder values, not tracker readings, and the stage split is a typical adult pattern rather than anything measured on you. Edit the fields to your real nights. At ~6.6 h average you are running a gap of several hours a week — that is the single biggest brake on a 6-day split in a deficit.</p>
+    <p class="note">Duration and the 7-day gap come from the times you enter. Sleep stages aren’t shown because nothing here measures them — a stage split would be a guess dressed up as data. Consistent hours are what move the needle on a 6-day split in a deficit.</p>
   </section>
 
   <!-- ============ 7. SUPPLEMENTS ============ -->
@@ -829,11 +827,21 @@ function eatenTotals(){
   return S.meals.filter(m => m.eaten)
     .reduce((a, m) => ({ k: a.k + m.k, p: a.p + m.p, c: a.c + m.c, f: a.f + m.fa }), { k:0, p:0, c:0, f:0 });
 }
+// null when either time is missing. Defaulting a blank field to 00:00 made
+// bedtime and wake-up identical, which wrapped to a logged 24-hour night.
+function sleepMinutes(){
+  const bed = $('bed').value, wake = $('wake').value;
+  if(!bed || !wake) return null;
+  const [bh,bm] = bed.split(':').map(Number);
+  const [wh,wm] = wake.split(':').map(Number);
+  if([bh,bm,wh,wm].some(n => !Number.isFinite(n))) return null;
+  let mins = (wh*60+wm) - (bh*60+bm);
+  if(mins <= 0) mins += 1440;
+  return mins;
+}
 function sleepHoursNow(){
-  const [bh,bm] = ($('bed').value || '00:00').split(':').map(Number);
-  const [wh,wm] = ($('wake').value || '00:00').split(':').map(Number);
-  let mins = (wh*60+wm) - (bh*60+bm); if(mins <= 0) mins += 1440;
-  return +(mins/60).toFixed(2);
+  const mins = sleepMinutes();
+  return mins == null ? null : +(mins/60).toFixed(2);
 }
 
 function currentDailyPayload(){
@@ -1874,8 +1882,14 @@ function paintWeight(){
   // been loaded -- the headline figure used to be a hardcoded 85.4 that no
   // code ever updated, so it looked live even with an empty log.
   const has = S.weight != null;
-  $('wNow').dataset.count = has ? S.weight : 0;
-  if(!has) $('wNow').textContent = '--';
+  if(has){
+    $('wNow').dataset.count = S.weight;
+  }else{
+    // countUp() runs after this and animates anything carrying data-count, so
+    // the attribute has to go or it counts the placeholder back up to 0.0
+    delete $('wNow').dataset.count;
+    $('wNow').textContent = '––';
+  }
   $('bmi').textContent = has ? (S.weight / Math.pow(1.80, 2)).toFixed(1) : '--';
   $('goalLbl').textContent = 'Goal ' + S.goal + ' kg';
   $('startLbl').textContent = S.start != null ? `Start ${S.start} kg` : 'Start —';
@@ -1887,6 +1901,7 @@ function paintWeight(){
   if(!has){
     $('wleft').textContent = '';
     $('delta').textContent = '';
+    $('delta').hidden = true;   // the pill keeps its background when empty
     return;
   }
   const left = (S.weight - S.goal);
@@ -1897,6 +1912,7 @@ function paintWeight(){
     wk = ` · ${(left/weeks).toFixed(2)} kg/wk needed`;
   }
   $('wleft').textContent = left > 0 ? `${left.toFixed(1)} kg to go${wk}` : 'goal reached';
+  $('delta').hidden = false;
   $('delta').textContent = S.lastWeek != null
     ? (S.weight - S.lastWeek).toFixed(1) + ' kg vs last week'
     : 'first week logged';
@@ -1937,17 +1953,26 @@ $('todayW').addEventListener('blur', e => {
    SLEEP
    ======================================================= */
 function paintSleep(){
-  const [bh,bm] = $('bed').value.split(':').map(Number);
-  const [wh,wm] = $('wake').value.split(':').map(Number);
-  let mins = (wh*60+wm) - (bh*60+bm); if(mins <= 0) mins += 1440;
-  $('slDur').textContent = Math.floor(mins/60) + 'h ' + String(mins%60).padStart(2,'0') + 'm';
-
   const goal = parseFloat($('slGoal').value) || 7.5;
   S.sleep.goal = goal;
   $('slGoalLbl').textContent = goal + ' h';
 
-  // No stored sleep history, so the chart shows only what's actually known:
-  // tonight. It fills out left-to-right as real nights accumulate.
+  // Both times are needed to get a duration at all. Until they're filled in
+  // there is nothing to show -- arithmetic on an empty <input type=time>
+  // yields NaN, which is what used to render as "NaNh NaNm".
+  const mins = sleepMinutes();
+  if(mins == null){
+    $('slDur').textContent = '––';
+    $('slDebt').textContent = '—';
+    $('sbars').innerHTML = '';
+    $('slHint').textContent = 'Enter last night’s bedtime and wake-up to start tracking.';
+    return;
+  }
+  $('slHint').textContent = '';
+  $('slDur').textContent = Math.floor(mins/60) + 'h ' + String(mins%60).padStart(2,'0') + 'm';
+
+  // No stored sleep history yet, so the chart shows only what's actually
+  // known: tonight. It fills out as real nights accumulate.
   const wk = S.sleep.week.slice(0,6).concat([mins/60]);
   const debt = wk.reduce((a,v) => a + Math.max(0, goal - v), 0);
   $('slDebt').textContent = debt.toFixed(1) + ' h';
