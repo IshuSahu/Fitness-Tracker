@@ -288,6 +288,11 @@ input,select{font-family:inherit;color:var(--txt)}
 .meal.eaten{background:rgba(74,222,128,.055);border-color:rgba(74,222,128,.22)}
 .meal-b{flex:1;min-width:0}
 .meal-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.meal-sel{width:100%;margin-top:7px;background:rgba(255,255,255,.05);border:1px solid var(--line);
+  border-radius:8px;padding:5px 7px;font-size:11.5px;color:var(--txt);
+  font-family:'Space Grotesk',sans-serif}
+.meal-sel:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.meal.eaten .meal-sel{opacity:.6}
 .meal-n{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:500}
 .meal-t{font-size:11px;color:var(--gold);font-family:'Space Grotesk',sans-serif}
 .meal-f{font-size:12px;color:var(--dim);margin-top:4px}
@@ -820,6 +825,7 @@ function currentDailyPayload(){
   return {
     water_l: +((S.water.filled * S.water.glass / 1000).toFixed(3)),
     meals: S.meals.map(m => m.eaten),
+    meal_choices: S.mealChoice.slice(),
     supplements: S.supps.map(s => s.done),
     sleep: { bed: $('bed').value, wake: $('wake').value, goal: S.sleep.goal, quality: $('slQual').value },
     kcal_eaten: t.k, protein_g: t.p, carbs_g: t.c, fat_g: t.f,
@@ -890,6 +896,12 @@ async function loadPlan(dayKey){
 async function loadDailyAndWeight(date){
   const row = await api('/api/daily?date=' + date);
   S.meals.forEach((m,i) => { m.eaten = !!(row.meals && row.meals[i]); });
+  // fall back to the default option for any slot the stored array doesn't cover
+  S.mealChoice = MEAL_OPTIONS.map((slot,i) => {
+    const v = row.meal_choices && row.meal_choices[i];
+    return (Number.isInteger(v) && v >= 0 && v < slot.opts.length) ? v : 0;
+  });
+  applyMealChoices();
   S.supps.forEach((s,i) => { s.done = !!(row.supplements && row.supplements[i]); });
   S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
   const sleep = (row.sleep && typeof row.sleep === 'object') ? row.sleep : {};
@@ -932,6 +944,132 @@ async function loadAllFromApi(){
 /* =======================================================
    STATE
    ======================================================= */
+// Each slot carries alternatives that hit roughly the same macros, so
+// swapping one never quietly wrecks the day's totals. All vegetarian, no egg.
+// Option 0 is the default plan.
+const MEAL_OPTIONS = [
+  {n:"Breakfast", t:"7:45 AM", opts:[
+    {label:"Oats + paneer bhurji",
+     f:"Oats 35 g cooked in 200 ml toned milk · paneer bhurji (100 g low-fat paneer, ½ tsp oil) · 1 banana",
+     k:550,p:30,c:61,fa:23,
+     prep:"Bhurji on Sunday for two days; oats in the microwave in 3 min."},
+    {label:"Moong dal chilla + curd",
+     f:"Moong dal chilla ×2 (60 g dry moong dal) · 150 g curd",
+     k:545,p:32,c:56,fa:18,
+     prep:"Highest protein of the five. Soak the dal overnight, or 20 minutes in hot water if you forgot."},
+    {label:"Besan chilla + curd",
+     f:"Besan chilla ×2 (60 g besan, onion, ½ tsp oil) · 150 g curd",
+     k:540,p:31,c:52,fa:22,
+     prep:"Nothing to soak, nothing to plan — besan is always in the house. This is the no-prep fallback."},
+    {label:"Poha + milk + whey",
+     f:"Poha with peanuts · 200 ml toned milk · ½ scoop whey",
+     k:560,p:31,c:67,fa:18,
+     prep:"Fastest cooked option, about 10 minutes. The half scoop is what keeps poha from being a protein hole."},
+    {label:"Curd + muesli (no cooking)",
+     f:"200 g curd · 30 g muesli · 1 banana · 10 g peanut butter",
+     k:555,p:27,c:70,fa:19,
+     prep:"Zero cooking, zero stove. For mornings you are already late."},
+  ]},
+  {n:"Lunch", t:"1:15 PM", opts:[
+    {label:"Dal + soya keema",
+     f:"2 chapati · 1 katori dal · soya keema (40 g dry soya, onion-tomato, 1 tsp oil) · 100 g sabji · 150 g curd · salad",
+     k:670,p:43,c:80,fa:19,
+     prep:"Carry the soya keema in your tiffin — it is the protein anchor of your day."},
+    {label:"Rajma + curd",
+     f:"2 chapati · rajma (60 g dry) · 150 g curd · salad",
+     k:660,p:38,c:85,fa:16,
+     prep:"About 5 g under on protein — an extra 100 g curd closes it if the day is light elsewhere."},
+    {label:"Chole + jeera rice",
+     f:"Jeera rice (150 g cooked) · chole (60 g dry) · 150 g curd · salad",
+     k:680,p:36,c:92,fa:17,
+     prep:"The carb-heaviest lunch. Good on a legs day, worth topping up with curd for protein."},
+    {label:"Paneer bhurji",
+     f:"2 chapati · paneer bhurji (100 g low-fat paneer, 1 tsp oil) · 100 g sabji · 150 g curd",
+     k:665,p:42,c:72,fa:22,
+     prep:"Closest match to the default on protein. Paneer cooks in 6 minutes from cold."},
+    {label:"Moong dal khichdi",
+     f:"Moong dal khichdi · 150 g curd · salad",
+     k:650,p:34,c:88,fa:15,
+     prep:"One pot, lightest on prep and on the stomach. The easiest lunch to make the night before."},
+  ]},
+  {n:"Pre-workout", t:"7:30 PM", opts:[
+    {label:"Brown bread + peanut butter",
+     f:"2 slices brown bread · 10 g peanut butter",
+     k:200,p:8,c:28,fa:7,
+     prep:"Your current habit, kept. Portion and timing are right — peanut butter trimmed to 10 g so fat doesn't sit heavy."},
+    {label:"Banana + almonds",
+     f:"1 banana · 6 almonds",
+     k:195,p:5,c:28,fa:8,
+     prep:"Nothing to prepare and nothing to carry. Fine when you're heading straight from work."},
+    {label:"Apple + roasted chana",
+     f:"1 apple · 15 g roasted chana",
+     k:190,p:6,c:34,fa:3,
+     prep:"Lowest fat of the four, so it sits lightest if you lift soon after eating."},
+    {label:"Muesli + milk",
+     f:"30 g muesli · 100 ml toned milk",
+     k:205,p:7,c:32,fa:5,
+     prep:"Desk-friendly. Keep the muesli at work and this needs no planning at all."},
+  ]},
+  {n:"Post-workout", t:"9:20 PM", opts:[
+    {label:"Whey shake",
+     f:"1 scoop whey (30 g) in 300 ml water",
+     k:120,p:24,c:2,fa:2,
+     prep:"Shake it at the gym or in the auto home. No rush — the window is hours wide."},
+    {label:"Paneer cubes",
+     f:"150 g low-fat paneer, cubed, with salt and chaat masala",
+     k:180,p:25,c:4,fa:8,
+     prep:"Whole-food equal of the shake on protein. Cheapest way to skip whey entirely."},
+    {label:"Milk + half scoop",
+     f:"250 ml toned milk · ½ scoop whey",
+     k:175,p:18,c:12,fa:5,
+     prep:"Stretches the tub when whey is running low."},
+    {label:"Curd + honey (low protein)",
+     f:"200 g curd · 1 tsp honey",
+     k:160,p:12,c:18,fa:5,
+     prep:"Half the protein of a shake — a genuine fallback for when the whey has run out, not an equal swap. Expect to make up ~12 g elsewhere."},
+  ]},
+  {n:"Dinner", t:"10:00 PM", opts:[
+    {label:"Soya chunk sabji",
+     f:"2 chapati · soya chunk sabji (50 g dry soya, 1 tsp oil) · 100 g mixed sabji · salad",
+     k:465,p:35,c:61,fa:10,
+     prep:"Soak the soya before you leave for the gym; sabji is 8 minutes when you walk in."},
+    {label:"Paneer sabji",
+     f:"2 chapati · paneer sabji (100 g low-fat paneer, 1 tsp oil) · salad",
+     k:470,p:33,c:52,fa:14,
+     prep:"No soaking. The one to pick when you got home later than planned."},
+    {label:"Tofu bhurji",
+     f:"2 chapati · tofu bhurji (150 g tofu, 1 tsp oil) · 100 g sabji · salad",
+     k:455,p:30,c:54,fa:15,
+     prep:"Lighter on the gut than paneer late at night, if dinner at 10 PM sits heavy."},
+    {label:"Chana masala",
+     f:"2 chapati · chana masala (50 g dry kabuli chana) · salad",
+     k:470,p:28,c:68,fa:10,
+     prep:"Lowest protein here at 28 g — best on a day lunch already ran high."},
+    {label:"Khichdi + curd",
+     f:"Moong dal khichdi · 150 g curd · salad",
+     k:460,p:26,c:66,fa:11,
+     prep:"The recovery-day dinner. One pot, 15 minutes, nothing to think about."},
+  ]},
+  {n:"Before bed", t:"11:15 PM", opts:[
+    {label:"Milk + roasted chana",
+     f:"200 ml toned milk · 15 g roasted chana",
+     k:175,p:10,c:19,fa:8,
+     prep:"Optional but useful — slow protein across your overnight fast."},
+    {label:"Curd",
+     f:"200 g curd, plain",
+     k:150,p:11,c:12,fa:5,
+     prep:"Slightly more protein for slightly fewer calories than the milk."},
+    {label:"Milk + almonds",
+     f:"200 ml toned milk · 5 soaked almonds",
+     k:180,p:8,c:13,fa:10,
+     prep:"Soak the almonds in the morning and they're waiting for you."},
+    {label:"Skip tonight",
+     f:"Nothing — closing the day here",
+     k:0,p:0,c:0,fa:0,
+     prep:"A real choice, not a failure. If the day already hit its protein and calorie targets, skipping this is the right call."},
+  ]},
+];
+
 // No sample weights, no sample history: anything not loaded from the API
 // stays null and renders as an empty state. A fabricated downward trend that
 // looks like real progress is worse than a blank card.
@@ -941,32 +1079,8 @@ const S = {
   history:[],
   water:{target:3.4, glass:250, filled:0},
   sleep:{week:[], goal:7.5},
-  meals:[
-    {n:"Breakfast", t:"7:45 AM",
-     f:"Oats 35 g cooked in 200 ml toned milk · paneer bhurji (100 g low-fat paneer, ½ tsp oil) · 1 banana",
-     k:550,p:30,c:61,fa:23,
-     prep:"Bhurji on Sunday for two days; oats in the microwave in 3 min.", eaten:false},
-    {n:"Lunch", t:"1:15 PM",
-     f:"2 chapati · 1 katori dal · soya keema (40 g dry soya, onion-tomato, 1 tsp oil) · 100 g sabji · 150 g curd · salad",
-     k:670,p:43,c:80,fa:19,
-     prep:"Carry the soya keema in your tiffin — it is the protein anchor of your day.", eaten:false},
-    {n:"Pre-workout", t:"7:30 PM",
-     f:"2 slices brown bread · 10 g peanut butter",
-     k:200,p:8,c:28,fa:7,
-     prep:"Your current habit, kept: 2 slices instead of 1–1.5, an hour before lifting. Portion and timing are right — peanut butter trimmed to 10 g so fat doesn't sit heavy.", eaten:false},
-    {n:"Post-workout", t:"9:20 PM",
-     f:"1 scoop whey (30 g) in 300 ml water",
-     k:120,p:24,c:2,fa:2,
-     prep:"Shake it at the gym or in the auto home. No rush — the window is hours wide.", eaten:false},
-    {n:"Dinner", t:"10:00 PM",
-     f:"2 chapati · soya chunk sabji (50 g dry soya, 1 tsp oil) · 100 g mixed sabji · salad",
-     k:465,p:35,c:61,fa:10,
-     prep:"Soak the soya before you leave for the gym; sabji is 8 minutes when you walk in.", eaten:false},
-    {n:"Before bed", t:"11:15 PM",
-     f:"200 ml toned milk · 15 g roasted chana",
-     k:175,p:10,c:19,fa:8,
-     prep:"Optional but useful — 12 g of slow protein across your overnight fast.", eaten:false}
-  ],
+  mealChoice: MEAL_OPTIONS.map(() => 0),
+  meals: MEAL_OPTIONS.map(s => ({n:s.n, t:s.t, ...s.opts[0], eaten:false})),
   supps:[
     {t:"7:45 AM", n:"Multivitamin", d:"1 tablet with breakfast",
      p:"Take it with food — fat-soluble vitamins need it. Insurance, not a substitute for a blood test.", done:false},
@@ -1501,12 +1615,29 @@ function buildExercises(){
 /* =======================================================
    MEALS · CALORIES · MACROS
    ======================================================= */
+// Rewrites each slot's food and macros from the currently chosen option,
+// leaving the eaten tick alone. Everything downstream keeps reading S.meals.
+function applyMealChoices(){
+  MEAL_OPTIONS.forEach((slot, i) => {
+    const o = slot.opts[S.mealChoice[i]] || slot.opts[0];
+    Object.assign(S.meals[i], {n:slot.n, t:slot.t, f:o.f, k:o.k, p:o.p, c:o.c, fa:o.fa, prep:o.prep});
+  });
+}
+
 function buildMeals(){
-  $('meals').innerHTML = S.meals.map((m,i) => `
+  applyMealChoices();
+  $('meals').innerHTML = S.meals.map((m,i) => {
+    const slot = MEAL_OPTIONS[i];
+    const sel = slot.opts.length > 1 ? `
+        <select class="meal-sel" data-mealopt="${i}" aria-label="Choose what to eat for ${m.n}">
+          ${slot.opts.map((o,j) =>
+            `<option value="${j}"${j === S.mealChoice[i] ? ' selected' : ''}>${o.label}</option>`).join('')}
+        </select>` : '';
+    return `
     <div class="meal${m.eaten?' eaten':''}">
       <button class="tick" aria-pressed="${m.eaten}" data-meal="${i}" aria-label="Mark ${m.n} as eaten">✓</button>
       <div class="meal-b">
-        <div class="meal-h"><span class="meal-n">${m.n}</span><span class="meal-t">${m.t}</span></div>
+        <div class="meal-h"><span class="meal-n">${m.n}</span><span class="meal-t">${m.t}</span></div>${sel}
         <div class="meal-f">${m.f}</div>
         <div class="mac">
           <span class="k">${m.k} kcal</span><span class="pr">P ${m.p} g</span>
@@ -1514,9 +1645,15 @@ function buildMeals(){
         </div>
         ${m.prep?`<div class="meal-p">${m.prep}</div>`:''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   $('meals').querySelectorAll('[data-meal]').forEach(b =>
     b.addEventListener('click', () => { const i=+b.dataset.meal; S.meals[i].eaten=!S.meals[i].eaten; buildMeals(); recalc(); persist(); }));
+  $('meals').querySelectorAll('[data-mealopt]').forEach(sel =>
+    sel.addEventListener('change', () => {
+      S.mealChoice[+sel.dataset.mealopt] = +sel.value;
+      buildMeals(); recalc(); persist();
+    }));
 }
 
 const RING_C = 477.5;

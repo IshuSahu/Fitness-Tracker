@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 class DailyOut(BaseModel):
     water_l: float = 0
     meals: list[bool] = []
+    # which option was chosen per meal slot; indexes into the frontend's
+    # MEAL_OPTIONS, parallel to `meals`. Empty means every slot is on default.
+    meal_choices: list[int] = []
     supplements: list[bool] = []
     sleep: dict = {}
     kcal_eaten: Optional[int] = None
@@ -20,6 +23,7 @@ class DailyOut(BaseModel):
 class DailyIn(BaseModel):
     water_l: float = 0
     meals: list[bool] = []
+    meal_choices: list[int] = []
     supplements: list[bool] = []
     sleep: dict = {}
     kcal_eaten: Optional[int] = None

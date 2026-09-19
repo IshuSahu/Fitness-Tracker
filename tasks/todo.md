@@ -41,9 +41,9 @@ Four asks, all about rigidity — plus one real bug found while researching them
 - [x] `loadAllFromApi` propagates failure instead of swallowing it.
 
 ### 2. Meal options
-- [ ] Migration `002_daily_logs_meal_choices.sql`: add `meal_choices jsonb`.
+- [x] Migration `002_daily_logs_meal_choices.sql`: add `meal_choices jsonb`.
 - [ ] `schemas.py`/`daily.py`: `meal_choices: list[int]` through DailyIn/Out.
-- [ ] `index.html`: `MEAL_OPTIONS` constant (all vegetarian, macro-matched per
+- [x] `index.html`: `MEAL_OPTIONS` constant (all vegetarian, macro-matched per
       slot), `<select>` per meal card, choice persisted.
 - [x] Collapse the duplicate macro summers (`recalc()` / `eatenTotals()`) into
       one function reading the chosen variant.

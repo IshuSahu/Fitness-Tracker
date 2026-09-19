@@ -17,8 +17,8 @@ async def get_daily(
 ):
     pool = await get_pool()
     row = await pool.fetchrow(
-        """select water_l, meals, supplements, sleep, kcal_eaten, protein_g,
-                  carbs_g, fat_g, sleep_hours, streak
+        """select water_l, meals, meal_choices, supplements, sleep, kcal_eaten,
+                  protein_g, carbs_g, fat_g, sleep_hours, streak
              from daily_logs where user_id = $1 and log_date = $2""",
         user_id, date,
     )
@@ -27,6 +27,7 @@ async def get_daily(
     return DailyOut(
         water_l=float(row["water_l"] or 0),
         meals=json.loads(row["meals"]) if isinstance(row["meals"], str) else (row["meals"] or []),
+        meal_choices=json.loads(row["meal_choices"]) if isinstance(row["meal_choices"], str) else (row["meal_choices"] or []),
         supplements=json.loads(row["supplements"]) if isinstance(row["supplements"], str) else (row["supplements"] or []),
         sleep=json.loads(row["sleep"]) if isinstance(row["sleep"], str) else (row["sleep"] or {}),
         kcal_eaten=row["kcal_eaten"],
@@ -46,17 +47,19 @@ async def put_daily(
 ):
     pool = await get_pool()
     await pool.execute(
-        """insert into daily_logs (user_id, log_date, water_l, meals, supplements, sleep,
-                                   kcal_eaten, protein_g, carbs_g, fat_g, sleep_hours, streak)
-           values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12)
+        """insert into daily_logs (user_id, log_date, water_l, meals, meal_choices,
+                                   supplements, sleep, kcal_eaten, protein_g, carbs_g,
+                                   fat_g, sleep_hours, streak)
+           values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13)
            on conflict (user_id, log_date) do update set
              water_l = excluded.water_l, meals = excluded.meals,
+             meal_choices = excluded.meal_choices,
              supplements = excluded.supplements, sleep = excluded.sleep,
              kcal_eaten = excluded.kcal_eaten, protein_g = excluded.protein_g,
              carbs_g = excluded.carbs_g, fat_g = excluded.fat_g,
              sleep_hours = excluded.sleep_hours, streak = excluded.streak""",
-        user_id, date, body.water_l, json.dumps(body.meals), json.dumps(body.supplements),
-        json.dumps(body.sleep), body.kcal_eaten, body.protein_g, body.carbs_g,
-        body.fat_g, body.sleep_hours, body.streak,
+        user_id, date, body.water_l, json.dumps(body.meals), json.dumps(body.meal_choices),
+        json.dumps(body.supplements), json.dumps(body.sleep), body.kcal_eaten,
+        body.protein_g, body.carbs_g, body.fat_g, body.sleep_hours, body.streak,
     )
     return {"ok": True}
