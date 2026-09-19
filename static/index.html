@@ -360,9 +360,31 @@ input,select{font-family:inherit;color:var(--txt)}
   .ring{width:150px;height:150px}
   .card{padding:15px}
 }
+/* skeleton placeholders -- shape-matched to the real cards so the layout
+   doesn't jump when data lands */
+.sk{
+  border-radius:8px;
+  background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.11) 37%,rgba(255,255,255,.05) 63%);
+  background-size:400% 100%;
+  animation:shimmer 1.4s var(--lim) infinite;
+}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+.sk-t{height:14px}
+.sk-s{height:11px;border-radius:6px}
+.sk-chip{height:32px;border-radius:12px}
+.sk-big{height:38px;border-radius:10px}
+.sk-line{height:11px;margin-top:9px;border-radius:6px}
+.sk-bar{height:10px;margin-top:11px;border-radius:999px}
+.sk-ring{width:136px;height:136px;border-radius:50%}
+.sk-spark{height:52px;border-radius:10px}
+.sk-ex{height:58px;border-radius:12px;margin-top:9px}
+.sk-glass{height:104px;border-radius:12px}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
   .glass[aria-pressed="true"] i{height:88%}
+  /* no shimmer to carry the "loading" signal, so hold a flat visible tone */
+  .sk{background:rgba(255,255,255,.08)}
 }
 </style>
 </head>
@@ -387,6 +409,56 @@ input,select{font-family:inherit;color:var(--txt)}
   </div>
 </div>
 
+<!-- ============ SKELETON / CONNECTION STATE ============ -->
+<div class="wrap" id="skeleton" style="display:none" aria-busy="true" aria-live="polite">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">IS</div>
+      <div><div class="sk sk-t" style="width:64px"></div><div class="sk sk-s" style="width:92px;margin-top:6px"></div></div>
+    </div>
+    <div class="sk sk-chip" style="width:132px"></div>
+    <div class="sk sk-chip" style="width:168px"></div>
+    <div class="sk sk-chip" style="width:210px"></div>
+    <div class="sk sk-chip" style="width:88px"></div>
+  </header>
+  <div class="grid">
+    <section class="card c4"><div class="sk sk-s" style="width:90px"></div>
+      <div class="sk sk-big" style="width:140px;margin-top:14px"></div>
+      <div class="sk sk-bar" style="margin-top:18px"></div>
+      <div class="sk sk-spark" style="margin-top:16px"></div></section>
+    <section class="card c4"><div class="sk sk-s" style="width:70px"></div>
+      <div class="sk sk-ring" style="margin:14px auto 0"></div>
+      <div class="sk sk-line" style="margin-top:16px"></div>
+      <div class="sk sk-line" style="width:72%"></div></section>
+    <section class="card c4"><div class="sk sk-s" style="width:66px"></div>
+      <div class="sk sk-bar" style="margin-top:16px"></div>
+      <div class="sk sk-bar"></div><div class="sk sk-bar"></div></section>
+    <section class="card c8"><div class="sk sk-s" style="width:118px"></div>
+      <div class="sk sk-line" style="margin-top:14px"></div>
+      <div class="sk sk-ex" style="margin-top:12px"></div>
+      <div class="sk sk-ex"></div><div class="sk sk-ex"></div></section>
+    <section class="card c4"><div class="sk sk-s" style="width:58px"></div>
+      <div class="sk sk-big" style="width:110px;margin-top:14px"></div>
+      <div class="sk sk-bar" style="margin-top:16px"></div>
+      <div class="sk sk-glass" style="margin-top:14px"></div></section>
+  </div>
+  <p class="note" id="skMsg" style="text-align:center;margin-top:18px">Connecting to your log…</p>
+</div>
+
+<!-- ============ CONNECTION FAILED ============ -->
+<div id="offlineScreen" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:20px">
+  <div class="card" style="max-width:420px;width:100%">
+    <div class="chead"><h2>Can&rsquo;t reach the server</h2><span class="tag">offline</span></div>
+    <p class="note" style="margin-top:0">Your log is safe — the dashboard just
+      won&rsquo;t show anything until it can load your real data. Showing
+      placeholder numbers here would be worse than showing nothing.</p>
+    <p class="note" id="offlineDetail" style="color:var(--dim2)"></p>
+    <button id="retryBtn" style="width:100%;padding:10px;border-radius:10px;border:none;cursor:pointer;
+      background:linear-gradient(120deg,var(--ember),var(--gold));color:#190A02;font-weight:600;
+      font-family:'Space Grotesk',sans-serif;font-size:13.5px;margin-top:6px">Try again</button>
+  </div>
+</div>
+
 <div class="wrap" id="dashboard" style="display:none">
 
 <!-- ============ HEADER ============ -->
@@ -408,10 +480,10 @@ input,select{font-family:inherit;color:var(--txt)}
     <span class="chip" id="todayChip">Today</span>
     <span class="chip streak">🔥
       <label for="streak" style="font-size:11.5px;color:var(--dim)">streak</label>
-      <input class="streak-in num" id="streak" type="number" min="0" max="999" value="12" aria-label="Current streak in days">
+      <input class="streak-in num" id="streak" type="number" min="0" max="999" value="" aria-label="Current streak in days">
       <b style="color:var(--dim)">d</b>
     </span>
-    <span class="chip" id="saveChip" style="border-color:rgba(74,222,128,.3);color:var(--green)" aria-live="polite">Saved locally</span>
+    <span class="chip" id="saveChip" aria-live="polite">—</span>
     <button class="chip" id="lockDay" style="border-color:rgba(255,194,75,.4);background:linear-gradient(120deg,rgba(255,106,61,.16),rgba(255,194,75,.10));font-weight:600;cursor:pointer">Lock today&rsquo;s log →</button>
     <button id="logoutBtn" style="background:none;border:none;color:var(--dim2);font-size:11px;
       cursor:pointer;text-decoration:underline;padding:4px;font-family:inherit">Log out</button>
@@ -422,23 +494,23 @@ input,select{font-family:inherit;color:var(--txt)}
 
   <!-- ============ 1. WEIGHT ============ -->
   <section class="card c4" aria-labelledby="h-w">
-    <div class="chead"><h2 id="h-w">Body weight</h2><span class="demo" id="wHistTag">sample history</span></div>
+    <div class="chead"><h2 id="h-w">Body weight</h2><span class="demo" id="wHistTag">—</span></div>
     <div class="wrow">
-      <div class="big num"><span id="wNow" data-count="85.4" data-dec="1">0</span><small>kg</small></div>
-      <span class="delta" id="delta">−0.8 kg vs last week</span>
+      <div class="big num"><span id="wNow" data-count="0" data-dec="1">––</span><small>kg</small></div>
+      <span class="delta" id="delta"></span>
     </div>
     <div class="wmeta">
       <span>Height <b>180 cm · 5&prime;11&Prime;</b></span>
       <span>BMI <b class="num" id="bmi">—</b></span>
     </div>
     <div class="prog">
-      <div class="ends"><span>Start 89.5 kg</span><span id="goalLbl">Goal 78 kg</span></div>
+      <div class="ends"><span id="startLbl">Start —</span><span id="goalLbl">Goal 78 kg</span></div>
       <div class="bar"><i id="wbar"></i></div>
       <div class="ends" style="margin:6px 0 0"><span id="wpct">—</span><span id="wleft">—</span></div>
     </div>
     <svg class="spark" id="spark" viewBox="0 0 300 52" preserveAspectRatio="none" role="img" aria-label="Weekly weight trend"></svg>
     <div class="wedit">
-      <div class="fld"><label for="todayW">Today&rsquo;s weight (kg)</label><input id="todayW" type="number" value="85.4" min="50" max="150" step="0.1"></div>
+      <div class="fld"><label for="todayW">Today&rsquo;s weight (kg)</label><input id="todayW" type="number" value="" min="50" max="150" step="0.1"></div>
       <div class="fld"><label for="goalW">Goal weight (kg)</label><input id="goalW" type="number" value="78" min="55" max="120" step="0.5"></div>
     </div>
     <div class="wedit">
@@ -566,10 +638,10 @@ input,select{font-family:inherit;color:var(--txt)}
   <section class="card c7" aria-labelledby="h-f">
     <div class="chead"><h2 id="h-f">Fuel plan</h2><span class="tag">vegetarian · home-style · ~₹85/day</span></div>
     <div class="fuel-sum">
-      <span>Full day <b class="num">2,180 kcal</b></span>
-      <span>Protein <b class="num">150 g</b></span>
-      <span>Carbs <b class="num">251 g</b></span>
-      <span>Fat <b class="num">69 g</b></span>
+      <span>Full day <b class="num" id="fdK">—</b></span>
+      <span>Protein <b class="num" id="fdP">—</b></span>
+      <span>Carbs <b class="num" id="fdC">—</b></span>
+      <span>Fat <b class="num" id="fdF">—</b></span>
     </div>
     <div id="meals"></div>
     <p class="note">Values are approximations for standard home portions — your atta, oil quantity, paneer brand and dal thickness will move these by 10&ndash;15%. Weigh oats, paneer, soya and peanut butter for a week and the rest will look after itself. Everything here is on your list except soya chunks, which I&rsquo;ve added because they are the cheapest vegetarian protein available to you (~52 g protein per 100 g dry, around ₹15).</p>
@@ -577,9 +649,9 @@ input,select{font-family:inherit;color:var(--txt)}
 
   <!-- ============ 8. SLEEP ============ -->
   <section class="card acc-violet c5" aria-labelledby="h-sl">
-    <div class="chead"><h2 id="h-sl">Sleep</h2><span class="demo">demo data — edit to match your sleep</span></div>
+    <div class="chead"><h2 id="h-sl">Sleep</h2><span class="demo">from your logged nights</span></div>
     <div class="sleep-top">
-      <div class="big num"><span id="slDur">6h 40m</span></div>
+      <div class="big num"><span id="slDur">––</span></div>
       <div style="text-align:right;font-size:12px;color:var(--dim)">
         <div>Goal <b class="num" style="color:var(--txt)" id="slGoalLbl">7.5 h</b></div>
         <div>7-day gap <b class="num" style="color:#F87171" id="slDebt">—</b></div>
@@ -617,7 +689,7 @@ input,select{font-family:inherit;color:var(--txt)}
 
   <!-- ============ 7. SUPPLEMENTS ============ -->
   <section class="card c4" aria-labelledby="h-su">
-    <div class="chead"><h2 id="h-su">Supplements</h2><span class="tag">3 confirmed</span></div>
+    <div class="chead"><h2 id="h-su">Supplements</h2><span class="tag" id="suppTag"></span></div>
     <div id="supps"></div>
     <p class="note">Only what you told me you actually take. Whey is convenience, not a requirement — 100 g paneer or 50 g dry soya does the same job for less money. Creatine at 3&ndash;5 g daily needs no loading phase and no specific timing; consistency is the whole trick. A multivitamin is insurance, not a diagnosis: if you want to act on B12, D3 or iron, get a blood test and let a doctor set the dose — iron especially should never be supplemented blind.</p>
   </section>
@@ -725,8 +797,7 @@ async function api(path, opts = {}){
   if(res.status === 401){
     AUTH_TOKEN = null;
     await sb.auth.signOut().catch(() => {});
-    $('dashboard').style.display = 'none';
-    $('loginScreen').style.display = '';
+    showOnly('loginScreen');
     throw new Error('unauthorized');
   }
   if(!res.ok) throw new Error('http ' + res.status);
@@ -814,47 +885,43 @@ async function loadPlan(dayKey){
   }
 }
 
+// Failures here propagate: boot needs to tell "loaded" from "gave up", and
+// quietly substituting defaults is what made an offline page look live.
 async function loadDailyAndWeight(date){
-  try{
-    const row = await api('/api/daily?date=' + date);
-    S.meals.forEach((m,i) => { m.eaten = !!(row.meals && row.meals[i]); });
-    S.supps.forEach((s,i) => { s.done = !!(row.supplements && row.supplements[i]); });
-    S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
-    const sleep = (row.sleep && typeof row.sleep === 'object') ? row.sleep : {};
-    $('bed').value = sleep.bed || '';
-    $('wake').value = sleep.wake || '';
-    if(sleep.goal){ $('slGoal').value = sleep.goal; S.sleep.goal = sleep.goal; }
-    $('slQual').value = sleep.quality || 'Okay';
-    $('streak').value = row.streak != null ? row.streak : 0;
-  }catch(e){
-    console.warn('daily load failed, using local defaults', e);
-    S.meals.forEach(m => m.eaten = false);
-    S.supps.forEach(s => s.done = false);
-    S.water.filled = 0;
-  }
+  const row = await api('/api/daily?date=' + date);
+  S.meals.forEach((m,i) => { m.eaten = !!(row.meals && row.meals[i]); });
+  S.supps.forEach((s,i) => { s.done = !!(row.supplements && row.supplements[i]); });
+  S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
+  const sleep = (row.sleep && typeof row.sleep === 'object') ? row.sleep : {};
+  $('bed').value = sleep.bed || '';
+  $('wake').value = sleep.wake || '';
+  if(sleep.goal){ $('slGoal').value = sleep.goal; S.sleep.goal = sleep.goal; }
+  $('slQual').value = sleep.quality || 'Okay';
+  $('streak').value = row.streak != null ? row.streak : 0;
 
-  try{
-    const rows = await api('/api/weight?limit=8&date=' + date);
-    if(rows && rows.length){
-      // If `date` fell outside the normal recent-8 window, the backend
-      // appends it as one extra row (oldest-first once this list is
-      // reversed) -- excluded from the sparkline, which always shows the
-      // real recent trend regardless of what date is being edited.
-      const sparkRows = rows.length > 8 ? rows.slice(1) : rows;
-      const dateRow = rows.find(r => r.log_date === date);
-      const todayNow = todayISO();
-      S.history = sparkRows.map(r => +r.weight_kg);
-      S.start = S.history[0];
-      const weekAgo = sparkRows.find(r => (new Date(todayNow) - new Date(r.log_date)) >= 6*864e5);
-      if(weekAgo) S.lastWeek = +weekAgo.weight_kg;
-      if(dateRow) S.weight = +dateRow.weight_kg;
-      else if(sparkRows.length) S.weight = +sparkRows[sparkRows.length-1].weight_kg;
-      $('todayW').value = dateRow ? dateRow.weight_kg : '';
-      $('wHistTag').textContent = 'your history';
-    } else {
-      $('todayW').value = '';
-    }
-  }catch(e){ console.warn('weight load failed, using sample history', e); }
+  const rows = await api('/api/weight?limit=8&date=' + date);
+  if(rows && rows.length){
+    // If `date` fell outside the normal recent-8 window, the backend
+    // appends it as one extra row (oldest-first once this list is
+    // reversed) -- excluded from the sparkline, which always shows the
+    // real recent trend regardless of what date is being edited.
+    const sparkRows = rows.length > 8 ? rows.slice(1) : rows;
+    const dateRow = rows.find(r => r.log_date === date);
+    const todayNow = todayISO();
+    S.history = sparkRows.map(r => +r.weight_kg);
+    S.start = S.history[0];
+    const weekAgo = sparkRows.find(r => (new Date(todayNow) - new Date(r.log_date)) >= 6*864e5);
+    S.lastWeek = weekAgo ? +weekAgo.weight_kg : null;
+    if(dateRow) S.weight = +dateRow.weight_kg;
+    else S.weight = +sparkRows[sparkRows.length-1].weight_kg;
+    $('todayW').value = dateRow ? dateRow.weight_kg : '';
+  } else {
+    S.history = [];
+    S.weight = null;
+    S.start = null;
+    S.lastWeek = null;
+    $('todayW').value = '';
+  }
 }
 
 async function loadAllFromApi(){
@@ -865,12 +932,15 @@ async function loadAllFromApi(){
 /* =======================================================
    STATE
    ======================================================= */
+// No sample weights, no sample history: anything not loaded from the API
+// stays null and renders as an empty state. A fabricated downward trend that
+// looks like real progress is worse than a blank card.
 const S = {
   targets: {kcal:2200, p:155, c:245, f:68},
-  weight:85.4, start:89.5, goal:78, lastWeek:86.2,
-  history:[89.5, 89.2, 88.7, 88.3, 87.6, 87.0, 86.2, 85.4],  // sample weekly averages
+  weight:null, start:null, goal:78, lastWeek:null,
+  history:[],
   water:{target:3.4, glass:250, filled:0},
-  sleep:{week:[6.2, 7.1, 5.8, 6.9, 7.4, 6.5, 6.67], goal:7.5},
+  sleep:{week:[], goal:7.5},
   meals:[
     {n:"Breakfast", t:"7:45 AM",
      f:"Oats 35 g cooked in 200 ml toned milk · paneer bhurji (100 g low-fat paneer, ½ tsp oil) · 1 banana",
@@ -1451,9 +1521,15 @@ function buildMeals(){
 
 const RING_C = 477.5;
 function recalc(){
-  const t = S.meals.filter(m => m.eaten)
-    .reduce((a,m) => ({k:a.k+m.k, p:a.p+m.p, c:a.c+m.c, f:a.f+m.fa}), {k:0,p:0,c:0,f:0});
+  const t = eatenTotals();   // same summer the persistence path uses
   const T = S.targets;
+
+  // what the full day adds up to if every meal is eaten as currently chosen
+  const plan = S.meals.reduce((a,m) => ({k:a.k+m.k, p:a.p+m.p, c:a.c+m.c, f:a.f+m.fa}), {k:0,p:0,c:0,f:0});
+  $('fdK').textContent = fmt(plan.k) + ' kcal';
+  $('fdP').textContent = Math.round(plan.p) + ' g';
+  $('fdC').textContent = Math.round(plan.c) + ' g';
+  $('fdF').textContent = Math.round(plan.f) + ' g';
 
   $('kEaten').textContent = fmt(t.k);
   const left = T.kcal - t.k;
@@ -1519,19 +1595,32 @@ function buildSupps(){
     </div>`).join('');
   $('supps').querySelectorAll('[data-supp]').forEach(b =>
     b.addEventListener('click', () => { const i=+b.dataset.supp; S.supps[i].done=!S.supps[i].done; buildSupps(); persist(); }));
+  $('suppTag').textContent = `${S.supps.filter(s => s.done).length} of ${S.supps.length} taken`;
 }
 
 /* =======================================================
    WEIGHT · SPARKLINE
    ======================================================= */
 function paintWeight(){
-  const bmi = S.weight / Math.pow(1.80, 2);
-  $('bmi').textContent = bmi.toFixed(1);
+  // Every field here reads "--" rather than a number until a real weight has
+  // been loaded -- the headline figure used to be a hardcoded 85.4 that no
+  // code ever updated, so it looked live even with an empty log.
+  const has = S.weight != null;
+  $('wNow').dataset.count = has ? S.weight : 0;
+  if(!has) $('wNow').textContent = '--';
+  $('bmi').textContent = has ? (S.weight / Math.pow(1.80, 2)).toFixed(1) : '--';
   $('goalLbl').textContent = 'Goal ' + S.goal + ' kg';
-  const span = S.start - S.goal;
+  $('startLbl').textContent = S.start != null ? `Start ${S.start} kg` : 'Start —';
+  const span = (has && S.start != null) ? S.start - S.goal : 0;
   const pct = span > 0 ? Math.max(0, Math.min((S.start - S.weight) / span * 100, 100)) : 0;
   $('wbar').style.width = pct + '%';
-  $('wpct').textContent = Math.round(pct) + '% of the way';
+  $('wpct').textContent = has ? Math.round(pct) + '% of the way' : 'log a weight to start the trend';
+  $('wHistTag').textContent = S.history.length ? 'your history' : 'no history yet';
+  if(!has){
+    $('wleft').textContent = '';
+    $('delta').textContent = '';
+    return;
+  }
   const left = (S.weight - S.goal);
   const d = $('goalD').value ? new Date($('goalD').value) : null;
   let wk = '';
@@ -1540,10 +1629,17 @@ function paintWeight(){
     wk = ` · ${(left/weeks).toFixed(2)} kg/wk needed`;
   }
   $('wleft').textContent = left > 0 ? `${left.toFixed(1)} kg to go${wk}` : 'goal reached';
-  $('delta').textContent = (S.weight - S.lastWeek).toFixed(1) + ' kg vs last week';
+  $('delta').textContent = S.lastWeek != null
+    ? (S.weight - S.lastWeek).toFixed(1) + ' kg vs last week'
+    : 'first week logged';
 }
 function paintSpark(){
-  const h = S.history, min = Math.min(...h) - .5, max = Math.max(...h) + .5;
+  const h = S.history;
+  if(h.length < 2){   // a single point isn't a trend, and zero points isn't a line
+    $('spark').innerHTML = '';
+    return;
+  }
+  const min = Math.min(...h) - .5, max = Math.max(...h) + .5;
   const pts = h.map((v,i) => [i/(h.length-1)*296+2, 48 - (v-min)/(max-min)*40]);
   const line = pts.map(p => p.join(',')).join(' ');
   const area = `2,50 ${line} 298,50`;
@@ -1582,12 +1678,14 @@ function paintSleep(){
   S.sleep.goal = goal;
   $('slGoalLbl').textContent = goal + ' h';
 
+  // No stored sleep history, so the chart shows only what's actually known:
+  // tonight. It fills out left-to-right as real nights accumulate.
   const wk = S.sleep.week.slice(0,6).concat([mins/60]);
   const debt = wk.reduce((a,v) => a + Math.max(0, goal - v), 0);
   $('slDebt').textContent = debt.toFixed(1) + ' h';
 
   const maxH = Math.max(goal + 1.2, ...wk);
-  const names = ['M','T','W','T','F','S','S'];
+  const names = ['M','T','W','T','F','S','S'].slice(-wk.length);
   const bars = wk.map((v,i) =>
     `<div class="sbar${v < goal ? ' short':''}"><i style="height:${v/maxH*100}%"></i><span>${names[i]}</span></div>`).join('');
   $('sbars').innerHTML = `<div class="goalline" style="bottom:${goal/maxH*100*0.79 + 21}%"></div>` + bars;
@@ -1653,13 +1751,43 @@ $('lockDay').addEventListener('click', async () => {
 /* =======================================================
    AUTH GATE
    ======================================================= */
+// The dashboard is only revealed once real data is in hand. Showing the
+// markup first meant that with the server down you'd stare at a complete,
+// plausible dashboard built entirely from placeholder numbers.
+function showOnly(id){
+  for(const k of ['loginScreen','skeleton','offlineScreen','dashboard']){
+    $(k).style.display = k === id ? (k === 'offlineScreen' ? 'flex' : '') : 'none';
+  }
+}
+
 async function bootDashboard(){
-  $('loginScreen').style.display = 'none';
-  $('dashboard').style.display = '';
-  try{ await loadAllFromApi(); }
-  catch(e){ console.warn('API load failed, continuing with local defaults', e); }
+  showOnly('skeleton');
+  try{
+    const health = await fetch('/health').then(r => r.json()).catch(() => null);
+    if(!health || !health.ok){
+      throw new Error(health && health.detail
+        ? 'The server is up but can’t reach the database.'
+        : 'No response from the server. Is it running?');
+    }
+    await loadAllFromApi();
+  }catch(e){
+    console.warn('boot failed', e);
+    $('offlineDetail').textContent = e.message || String(e);
+    showOnly('offlineScreen');
+    return;
+  }
+  showOnly('dashboard');
   paintAll();
 }
+
+$('retryBtn').addEventListener('click', async () => {
+  const btn = $('retryBtn');
+  btn.disabled = true;
+  btn.textContent = 'Retrying…';
+  await bootDashboard();
+  btn.disabled = false;
+  btn.textContent = 'Try again';
+});
 
 $('loginBtn').addEventListener('click', async () => {
   const email = $('loginEmail').value.trim();
@@ -1694,8 +1822,7 @@ $('logoutBtn').addEventListener('click', async () => {
       return;
     }
   }catch(e){ console.warn('session check failed', e); }
-  $('loginScreen').style.display = '';
-  $('dashboard').style.display = 'none';
+  showOnly('loginScreen');
 })();
 </script>
 </body>
