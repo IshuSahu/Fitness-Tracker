@@ -9,6 +9,7 @@ from ..auth import verify_jwt
 from ..db import get_pool
 from ..schemas import LiftStateEntry, SetIn
 from .plan import week_no_for
+from .day_plan import resolve_day_key
 
 router = APIRouter(prefix="/api", tags=["lifts"])
 
@@ -84,10 +85,11 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
     pool = await get_pool()
     log_date = body.date or dt.date.today()
     dow = log_date.isoweekday()
-    day_key = DOW_KEYS[dow]
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # the programme being run, which isn't always the weekday's default
+            day_key = await resolve_day_key(conn, log_date)
             block = await _active_block(conn)
             week_no = week_no_for(block["start_date"], log_date) if block else 1
             block_id = block["id"] if block else None

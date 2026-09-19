@@ -49,23 +49,23 @@ Four asks, all about rigidity — plus one real bug found while researching them
       one function reading the chosen variant.
 
 ### 3. Reassign a date's workout
-- [ ] Migration `003_day_plan.sql`: `day_plan(log_date pk, day_key)`.
-- [ ] `routers/day_plan.py`: GET / PUT (409 once sets exist) / DELETE.
-- [ ] `lifts.py`: `post_set` resolves day_key from `day_plan` first.
-- [ ] `index.html`: workout select in the session header, disabled once locked.
+- [x] Migration `003_day_plan.sql`: `day_plan(log_date pk, day_key)`.
+- [x] `routers/day_plan.py`: GET / PUT (409 once sets exist) / DELETE.
+- [x] `lifts.py`: `post_set` resolves day_key from `day_plan` first.
+- [x] `index.html`: workout select in the session header, disabled once locked.
 
 ### 4. Substitute an exercise
-- [ ] Migration `004_exercise_swap.sql`: `exercise_swap(log_date, order_no, exercise_id)`.
-- [ ] `plan.py`: optional `date`, left-join the swap and substitute the slot.
-- [ ] `routers/exercises.py`: alternatives by shared `muscles` + same `kind`;
+- [x] Migration `004_exercise_swap.sql`: `exercise_swap(log_date, order_no, exercise_id)`.
+- [x] `plan.py`: optional `date`, left-join the swap and substitute the slot.
+- [x] `routers/exercises.py`: alternatives by shared `muscles` + same `kind`;
       PUT/DELETE swap with a 409 guard once that slot has sets.
-- [ ] `index.html`: per-exercise swap control + dropdown.
+- [x] `index.html`: per-exercise swap control + dropdown.
 
 ### Verification
-- [ ] Live-DB checks for the new endpoints and their 409 guards.
-- [ ] jsdom checks for the dropdowns, skeleton and error panel.
+- [x] Live-DB checks for the new endpoints and their 409 guards.
+- [x] jsdom checks for the dropdowns, skeleton and error panel.
 - [ ] Real browser: all three boot states, no fake numbers anywhere.
-- [ ] Clean up all test rows.
+- [x] Clean up all test rows.
 
 ## Review
 _(to be written when the unit of work is finished)_

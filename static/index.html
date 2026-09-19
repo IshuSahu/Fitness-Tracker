@@ -219,6 +219,20 @@ input,select{font-family:inherit;color:var(--txt)}
 .pending{font-size:10.5px;color:var(--dim2);margin-left:4px}
 .failed{font-size:10.5px;color:var(--ember);margin-left:4px}
 
+/* reassign-the-day + swap-an-exercise controls */
+.swaprow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
+.swaprow label{font-size:11.5px;color:var(--dim)}
+.swaprow .note{margin:0;font-size:11px;flex-basis:100%}
+.swapsel{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;
+  padding:5px 7px;font-size:11.5px;color:var(--txt);font-family:'Space Grotesk',sans-serif;max-width:100%}
+.swapsel:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
+.swapsel:disabled{opacity:.45}
+#dayPlanIn{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;
+  padding:5px 7px;font-size:11.5px;color:var(--txt);font-family:'Space Grotesk',sans-serif}
+#dayPlanIn:disabled{opacity:.45}
+.exswap{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
+.swapped-tag{font-size:10.5px;color:var(--gold)}
+
 /* warm-up / cool-down checklists */
 .prep{border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);
   padding:10px 12px;margin-bottom:10px}
@@ -594,6 +608,12 @@ input,select{font-family:inherit;color:var(--txt)}
       <span class="tag" id="sessTag">Mon · Push A</span>
     </div>
     <div class="days" id="days" role="group" aria-label="Choose a training day"></div>
+    <div class="swaprow">
+      <label for="dayPlanIn">Workout for this date</label>
+      <select id="dayPlanIn" aria-describedby="dayPlanNote"></select>
+      <button class="navbtn" id="dayPlanReset" type="button">Reset to weekday</button>
+      <span class="note" id="dayPlanNote"></span>
+    </div>
     <div class="sess">
       <div>
         <div id="warmup"></div>
@@ -881,9 +901,69 @@ async function loadDaySets(date){
   catch(e){ console.warn('day sets load failed', e); DAY_SETS = {}; }
 }
 
+// Which programme this date runs, and whether that's still changeable. Once a
+// set is logged the day is settled -- re-pointing it would leave those sets
+// filed under a session they were never part of.
+let DAY_PLAN = {day_key:null, source:'weekday', locked:false};
+
+async function loadDayPlan(date){
+  const weekday = {day_key: dayKeyForISO(date), source:'weekday', locked:false};
+  try{
+    const got = await api('/api/day-plan?date=' + date);
+    // curDay drives every subsequent render, so an unusable day_key here would
+    // take the whole session card down. Fall back rather than propagate it.
+    DAY_PLAN = (got && DOW.includes(got.day_key)) ? got : weekday;
+  }catch(e){
+    console.warn('day plan load failed', e);
+    DAY_PLAN = weekday;
+  }
+  return DAY_PLAN;
+}
+
+function paintDayPlan(){
+  const sel = $('dayPlanIn'), reset = $('dayPlanReset');
+  sel.innerHTML = DAYS.map(d =>
+    `<option value="${d.k}"${d.k === curDay ? ' selected' : ''}>${d.lbl}</option>`).join('');
+  sel.disabled = reset.disabled = DAY_PLAN.locked;
+  reset.style.display = DAY_PLAN.source === 'override' ? '' : 'none';
+  const weekdayLbl = DAYS.find(d => d.k === dayKeyForISO(viewDate)).lbl;
+  $('dayPlanNote').textContent = DAY_PLAN.locked
+    ? 'Sets are logged for this date, so its workout is settled.'
+    : DAY_PLAN.source === 'override'
+      ? `Moved here — this date would normally be ${weekdayLbl}.`
+      : 'Missed a session? Pick it here to run it on this date instead.';
+}
+
+async function setDayPlan(dayKey){
+  try{
+    if(dayKey === dayKeyForISO(viewDate)){
+      await api('/api/day-plan?date=' + viewDate, {method:'DELETE'});
+    }else{
+      await api('/api/day-plan?date=' + viewDate,
+                {method:'PUT', body: JSON.stringify({day_key: dayKey})});
+    }
+  }catch(e){
+    setStatus('offline');
+    await loadDayPlan(viewDate);   // server refused; show what it actually holds
+    paintDayPlan();
+    return;
+  }
+  await loadDayPlan(viewDate);
+  curDay = DAY_PLAN.day_key;
+  curEx = 0;
+  clearSetCursors();
+  await Promise.all([loadDaySets(viewDate), loadPlan(curDay)]);
+  buildDays(); paintDayPlan(); buildPrep(); buildExercises();
+  setStatus('saved');
+}
+
+$('dayPlanIn').addEventListener('change', () => setDayPlan($('dayPlanIn').value));
+$('dayPlanReset').addEventListener('click', () => setDayPlan(dayKeyForISO(viewDate)));
+
 async function loadPlan(dayKey){
   try{
-    const plan = await api('/api/plan/' + dayKey);
+    // date matters: a one-day exercise substitution is applied server-side
+    const plan = await api(`/api/plan/${dayKey}?date=${viewDate}`);
     PLAN_EXERCISES = plan.exercises;
   }catch(e){
     console.warn('plan load failed', e);
@@ -938,6 +1018,7 @@ async function loadDailyAndWeight(date){
 
 async function loadAllFromApi(){
   await loadDailyAndWeight(viewDate);
+  curDay = (await loadDayPlan(viewDate)).day_key;
   await Promise.all([loadLiftState(), loadDaySets(viewDate), loadPlan(curDay)]);
 }
 
@@ -1382,7 +1463,8 @@ function buildDays(){
   $('days').innerHTML = DAYS.map(d =>
     `<button class="day${d.k===todayK?' today':''}" data-day="${d.k}" aria-pressed="${d.k===curDay}">${d.lbl}</button>`).join('');
   $('days').querySelectorAll('.day').forEach(b => b.addEventListener('click', async () => {
-    curDay = b.dataset.day; curEx = 0; buildDays(); buildPrep();
+    curDay = b.dataset.day; curEx = 0; clearSetCursors();
+    buildDays(); paintDayPlan(); buildPrep();
     await loadPlan(curDay);
     buildExercises();
   }));
@@ -1495,6 +1577,23 @@ function buildPrep(){
   render('cool', 'Cool-down', p.cool, $('cooldown'));
 }
 
+// exercise_id null reverts the slot to whatever the programme says
+async function swapExercise(orderNo, exerciseId){
+  setStatus('saving');
+  try{
+    if(exerciseId){
+      await api('/api/exercise-swap?date=' + viewDate,
+                {method:'PUT', body: JSON.stringify({order_no: orderNo, exercise_id: exerciseId})});
+    }else{
+      await api(`/api/exercise-swap?date=${viewDate}&order_no=${orderNo}`, {method:'DELETE'});
+    }
+    setStatus('saved');
+  }catch(e){ setStatus('offline'); }
+  clearSetCursors();
+  await loadPlan(curDay);
+  buildExercises();
+}
+
 function buildExercises(){
   const list = PLAN_EXERCISES;
   doneMap[curDay] = doneMap[curDay] || list.map(() => false);
@@ -1551,6 +1650,19 @@ function buildExercises(){
     const overrideBits = [];
     if(x.override_load_kg != null) overrideBits.push(`aim for ${x.override_load_kg} kg`);
     overrideBits.push(x.override_note || 'load/rep target adjusted this week');
+    // swapping is only offered while the slot is untouched -- afterwards the
+    // logged sets belong to the exercise that's there now
+    const canSwap = !locked && !logged.length;
+    const swapUi = canSwap ? `
+        <div class="exswap">
+          <select class="swapsel" data-swap="${i}" aria-label="Swap ${x.name} for another exercise">
+            <option value="">Swap this exercise…</option>
+          </select>
+          ${x.swapped ? `<button class="navbtn" data-unswap="${i}">Undo</button>` : ''}
+        </div>` : '';
+    const swappedTag = x.swapped
+      ? `<div class="swapped-tag">Swapped in for today${x.planned_exercise_id ? ` · plan says ${x.planned_exercise_id}` : ''}</div>`
+      : '';
     return `
     <div class="ex${done[i]?' done':''}" aria-current="${i===curEx}">
       <button class="tick" aria-pressed="${done[i]}" data-tick="${i}" aria-label="Mark ${x.name} done">✓</button>
@@ -1561,7 +1673,9 @@ function buildExercises(){
           <div class="exmeta" style="color:var(--dim2)">${x.muscles.join(' · ')}</div>
           ${x.alt?`<div class="exalt">↳ ${x.alt}</div>`:''}
           ${x.overridden?`<div class="exalt" style="color:var(--gold)">Coach update: ${overrideBits.join(' · ')}</div>`:''}
+          ${swappedTag}
         </button>
+        ${swapUi}
         ${lastRef?`<div class="exalt" style="color:var(--gold)">Last time: ${showKg&&lastRef.load_kg!=null?lastRef.load_kg+' kg × ':''}${lastRef.reps}${showKg?'':' '+unitLabel}${st.last_date?` (${st.last_date})`:''}</div>`:''}
         ${body}
       </div>
@@ -1597,6 +1711,28 @@ function buildExercises(){
       setCursor[x.exercise_id] = Math.max(0, cur - 1);
       buildExercises();
     }));
+  // alternatives are fetched when the dropdown is first opened rather than
+  // for every exercise on every render
+  $('exlist').querySelectorAll('[data-swap]').forEach(sel => {
+    sel.addEventListener('focus', async () => {
+      if(sel.dataset.loaded) return;
+      sel.dataset.loaded = '1';
+      const x = list[+sel.dataset.swap];
+      try{
+        const res = await api(`/api/exercise-alternatives/${x.exercise_id}?date=${viewDate}`);
+        sel.insertAdjacentHTML('beforeend', res.alternatives.map(a =>
+          `<option value="${a.id}">${a.name} · ${a.equipment}</option>`).join(''));
+        if(!res.alternatives.length){
+          sel.insertAdjacentHTML('beforeend', '<option value="" disabled>No alternatives in the catalogue</option>');
+        }
+      }catch(e){ sel.dataset.loaded = ''; setStatus('offline'); }
+    });
+    sel.addEventListener('change', () => {
+      if(sel.value) swapExercise(list[+sel.dataset.swap].order_no, sel.value);
+    });
+  });
+  $('exlist').querySelectorAll('[data-unswap]').forEach(b =>
+    b.addEventListener('click', () => swapExercise(list[+b.dataset.unswap].order_no, null)));
 
   const x = list[curEx] || list[0];
   if(x){
@@ -1860,19 +1996,17 @@ function paintDaily(){
   paintWeight(); paintSpark(); paintSleep();
 }
 function paintAll(){
-  buildDays(); buildPrep(); buildExercises(); paintDaily(); countUp();
+  buildDays(); paintDayPlan(); buildPrep(); buildExercises(); paintDaily(); countUp();
 }
 
 $('viewDateIn').addEventListener('change', async () => {
   viewDate = $('viewDateIn').value || todayISO();
-  curDay = dayKeyForISO(viewDate);
   curEx = 0;
   clearSetCursors();
-  buildDays();
   await loadDailyAndWeight(viewDate);
+  curDay = (await loadDayPlan(viewDate)).day_key;
   await Promise.all([loadDaySets(viewDate), loadPlan(curDay)]);
-  buildPrep();
-  buildExercises();
+  buildDays(); paintDayPlan(); buildPrep(); buildExercises();
   paintDaily();
 });
 

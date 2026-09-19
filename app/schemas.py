@@ -58,6 +58,10 @@ class PlanExercise(BaseModel):
     overridden: bool
     override_note: str = ""
     override_load_kg: Optional[float] = None
+    # true when this slot is running a one-day substitution; planned_* is what
+    # the programme actually says, so the UI can offer to put it back
+    swapped: bool = False
+    planned_exercise_id: Optional[str] = None
 
 
 class PlanOut(BaseModel):

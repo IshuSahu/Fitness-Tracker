@@ -11,7 +11,7 @@ from fastapi import FastAPI, Response
 from fastapi.staticfiles import StaticFiles
 
 from .db import get_pool, close_pool
-from .routers import daily, weight, plan, lifts, coach, reports
+from .routers import daily, weight, plan, lifts, coach, reports, day_plan, exercises
 
 
 @asynccontextmanager
@@ -29,6 +29,8 @@ app.include_router(plan.router)
 app.include_router(lifts.router)
 app.include_router(coach.router)
 app.include_router(reports.router)
+app.include_router(day_plan.router)
+app.include_router(exercises.router)
 
 
 @app.get("/health")
