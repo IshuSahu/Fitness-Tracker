@@ -99,7 +99,7 @@ async def build(start: dt.date, end: dt.date) -> str:
             add(f"  {DAY_NAMES[cur_day]} ({cur_day})")
         rng = (str(r["base_rep_lo"]) if r["base_rep_lo"] == r["base_rep_hi"]
                else f"{r['base_rep_lo']}-{r['base_rep_hi']}")
-        unit = {"time": "sec", "reps": "reps"}.get(r["mode"], "")
+        unit = {"time": "sec", "mins": "min", "reps": "reps"}.get(r["mode"], "")
         add(f"    {r['order_no']}. {r['name']:<38} {r['base_sets']} x {rng} {unit}".rstrip()
             + f"   [{r['exercise_id']}]")
 

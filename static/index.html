@@ -224,6 +224,11 @@ select option:disabled{color:var(--dim2)}
 .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.16)}
 .dot.filled{background:var(--green)}
 .dot.cur{box-shadow:0 0 0 2px rgba(255,194,75,.45);background:var(--gold)}
+.warmtog{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--dim);
+  cursor:pointer;user-select:none;white-space:nowrap}
+.warmtog input{accent-color:var(--gold);width:13px;height:13px;margin:0}
+.warmtog:has(input:checked){color:var(--gold)}
+.warmnote{font-size:10.5px;color:var(--gold);margin-left:4px}
 .setsum{font-size:11px;color:var(--dim);margin-top:6px}
 .setsum b{color:var(--txt);font-weight:500}
 .pending{font-size:10.5px;color:var(--dim2);margin-left:4px}
@@ -568,6 +573,12 @@ select option:disabled{color:var(--dim2)}
     <div class="wedit">
       <div class="fld"><label for="goalD">Target date</label><input id="goalD" type="date" value="2026-12-27"></div>
     </div>
+    <div class="wedit">
+      <div class="fld"><label for="slHours">Sleep hours (from watch)</label>
+        <input id="slHours" type="number" value="" min="0" max="16" step="0.1" placeholder="7.5"></div>
+      <div class="fld"><label for="stepsIn">Steps today</label>
+        <input id="stepsIn" type="number" value="" min="0" max="100000" step="100" placeholder="8000"></div>
+    </div>
     <p class="note">Track weekly averages, not single-day fluctuations. BMI is a screening number only — it can't tell muscle from fat. Enter today&rsquo;s weight once each morning; it saves automatically and feeds the trend line above.</p>
   </section>
 
@@ -854,6 +865,9 @@ function eatenTotals(){
 }
 // null when either time is missing. Defaulting a blank field to 00:00 made
 // bedtime and wake-up identical, which wrapped to a logged 24-hour night.
+const numOrNull = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+const intOrNull = v => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+
 function sleepMinutes(){
   const bed = $('bed').value, wake = $('wake').value;
   if(!bed || !wake) return null;
@@ -863,10 +877,6 @@ function sleepMinutes(){
   let mins = (wh*60+wm) - (bh*60+bm);
   if(mins <= 0) mins += 1440;
   return mins;
-}
-function sleepHoursNow(){
-  const mins = sleepMinutes();
-  return mins == null ? null : +(mins/60).toFixed(2);
 }
 
 function currentDailyPayload(){
@@ -878,7 +888,9 @@ function currentDailyPayload(){
     supplements: S.supps.map(s => s.done),
     sleep: { bed: $('bed').value, wake: $('wake').value, goal: S.sleep.goal, quality: $('slQual').value },
     kcal_eaten: t.k, protein_g: t.p, carbs_g: t.c, fat_g: t.f,
-    sleep_hours: sleepHoursNow(),
+    // from the watch, typed in -- no longer derived from bed/wake times
+    sleep_hours: numOrNull($('slHours').value),
+    steps: intOrNull($('stepsIn').value),
     streak: parseInt($('streak').value, 10) || 0,
   };
 }
@@ -1015,6 +1027,8 @@ async function loadDailyAndWeight(date){
   $('wake').value = sleep.wake || '';
   if(sleep.goal){ $('slGoal').value = sleep.goal; S.sleep.goal = sleep.goal; }
   $('slQual').value = sleep.quality || 'Okay';
+  $('slHours').value = row.sleep_hours != null ? row.sleep_hours : '';
+  $('stepsIn').value = row.steps != null ? row.steps : '';
   $('streak').value = row.streak != null ? row.streak : 0;
 
   const rows = await api('/api/weight?limit=8&date=' + date);
@@ -1502,6 +1516,12 @@ function buildDays(){
 // Next commits that set by explicit index, so any earlier set can be corrected
 // in place. The per-exercise tick is the lock -- untick it and everything is
 // editable again, as many times as needed.
+// What an exercise's rep number actually counts. A treadmill walk is
+// prescribed in minutes, not the seconds a plank hold is.
+const UNIT_LABEL = {time: 'sec', mins: 'min', reps: 'reps'};
+
+const warmNext = {};         // exercise_id -> is the next set a warm-up?
+const warmCount = {};        // exercise_id -> warm-ups logged, for feedback
 const setCursor = {};        // exercise_id -> which set index is on screen
 const failedSaves = {};      // "exercise_id-index" -> true, save that didn't land
 
@@ -1520,12 +1540,20 @@ function curSetOf(x){
   return Math.max(0, Math.min(n, x.sets - 1));
 }
 
-function saveSet(x, idx, w, r){
-  const arr = (DAY_SETS[x.exercise_id] || []).slice();
-  const before = arr[idx];
-  arr[idx] = {load_kg: w, reps: r};
-  DAY_SETS[x.exercise_id] = arr;
+function saveSet(x, idx, w, r, warmup){
   const key = x.exercise_id + '-' + idx;
+  let before;
+  if(warmup){
+    // a ramp-up isn't a working set: it stays out of DAY_SETS, which drives
+    // the cursor, the dots and the completed count. The server indexes it
+    // separately too, so the index sent here is ignored.
+    warmCount[x.exercise_id] = (warmCount[x.exercise_id] || 0) + 1;
+  }else{
+    const arr = (DAY_SETS[x.exercise_id] || []).slice();
+    before = arr[idx];
+    arr[idx] = {load_kg: w, reps: r};
+    DAY_SETS[x.exercise_id] = arr;
+  }
   delete failedSaves[key];
   setStatus('saving');
   // deliberately not awaited: the UI has already advanced
@@ -1533,15 +1561,19 @@ function saveSet(x, idx, w, r){
     method: 'POST',
     body: JSON.stringify({
       exercise_id: x.exercise_id, weight_kg: w, reps: r,
-      set_index: idx, date: viewDate,
+      set_index: idx, date: viewDate, warmup: !!warmup,
     }),
   }).then(st => {
     LIFT_STATE[x.exercise_id] = st;
     setStatus('saved');
   }).catch(() => {
-    const cur = DAY_SETS[x.exercise_id];
-    if(before !== undefined) cur[idx] = before;
-    else cur.splice(idx, 1);   // a brand-new set is always the last one
+    if(warmup){
+      warmCount[x.exercise_id] -= 1;
+    }else{
+      const cur = DAY_SETS[x.exercise_id];
+      if(before !== undefined) cur[idx] = before;
+      else cur.splice(idx, 1);   // a brand-new set is always the last one
+    }
     failedSaves[key] = true;
     setStatus('offline');
     buildExercises();
@@ -1563,9 +1595,11 @@ function commitCurrent(i, cur){
     if(isNaN(w) || w <= 0) return false;
   }
   if(isNaN(r) || r <= 0) return false;
+  const warmup = !!warmNext[x.exercise_id];
   const prev = (DAY_SETS[x.exercise_id] || [])[cur];
-  const unchanged = prev && prev.reps === r && prev.load_kg === w;
-  if(!unchanged) saveSet(x, cur, w, r);
+  // a warm-up always records: repeating the same weight and reps is normal
+  const unchanged = !warmup && prev && prev.reps === r && prev.load_kg === w;
+  if(!unchanged) saveSet(x, cur, w, r, warmup);
   return true;
 }
 
@@ -1778,12 +1812,13 @@ function buildExercises(){
     const logged = DAY_SETS[x.exercise_id] || [];
     const locked = done[i];
     const showKg = x.mode === 'load';
-    const unitLabel = x.mode === 'time' ? 'sec' : 'reps';
+    const unitLabel = UNIT_LABEL[x.mode] || 'reps';
     const lastRef = (!logged.length && st && st.last_date && st.last_date !== viewDate
                      && st.last_sets && st.last_sets.length) ? st.last_sets[0] : null;
 
     const cur = curSetOf(x);
     const set = logged[cur];
+    const warmOn = !!warmNext[x.exercise_id];
     const complete = logged.length >= x.sets;
     const failed = failedSaves[x.exercise_id + '-' + cur];
 
@@ -1808,6 +1843,9 @@ function buildExercises(){
           <input type="number" class="loginp" placeholder="${unitLabel}" step="1" min="0"
             value="${set ? set.reps : ''}" data-logr="${i}"
             aria-label="${unitLabel==='sec'?'Seconds':'Reps'} for set ${cur+1} of ${x.name}">
+          <label class="warmtog" title="Ramp-up set: recorded, but kept out of PRs and rep targets">
+            <input type="checkbox" data-warm="${i}" ${warmOn?'checked':''}
+              aria-label="Log this as a warm-up set for ${x.name}">Warm-up</label>
           <span class="dots" aria-hidden="true">${dots}</span>
         </div>
         <div class="logrow">
@@ -1815,6 +1853,7 @@ function buildExercises(){
           <button class="navbtn primary" data-next="${i}" ${complete && cur === x.sets-1 ? 'disabled' : ''}>
             ${complete && cur === x.sets-1 ? 'Complete ✓' : 'Next ›'}</button>
           ${failed ? '<span class="failed">not saved — check connection</span>' : ''}
+          ${warmCount[x.exercise_id] ? `<span class="warmnote">${warmCount[x.exercise_id]} warm-up logged</span>` : ''}
         </div>`;
     }
     const overrideBits = [];
@@ -1871,7 +1910,8 @@ function buildExercises(){
         (x.mode === 'load' && !wEl.value ? wEl : rEl).focus();
         return;
       }
-      if(cur + 1 < x.sets) setCursor[x.exercise_id] = cur + 1;
+      // a warm-up doesn't use up one of the working sets, so the counter holds
+      if(!warmNext[x.exercise_id] && cur + 1 < x.sets) setCursor[x.exercise_id] = cur + 1;
       buildExercises();
     }));
   $('exlist').querySelectorAll('[data-back]').forEach(b =>
@@ -1879,6 +1919,11 @@ function buildExercises(){
       const i = +b.dataset.back, x = list[i], cur = curSetOf(x);
       commitCurrent(i, cur);
       setCursor[x.exercise_id] = Math.max(0, cur - 1);
+      buildExercises();
+    }));
+  $('exlist').querySelectorAll('[data-warm]').forEach(cb =>
+    cb.addEventListener('change', () => {
+      warmNext[list[+cb.dataset.warm].exercise_id] = cb.checked;
       buildExercises();
     }));
   $('exlist').querySelectorAll('[data-swap]').forEach(btn =>
@@ -2134,6 +2179,10 @@ function paintSleep(){
 }
 ['bed','wake','slGoal'].forEach(id => {
   $(id).addEventListener('input', () => { paintSleep(); persist(); });
+  $(id).addEventListener('blur', () => persist.flush());
+});
+['slHours','stepsIn'].forEach(id => {
+  $(id).addEventListener('input', persist);
   $(id).addEventListener('blur', () => persist.flush());
 });
 $('slQual').addEventListener('change', persist);

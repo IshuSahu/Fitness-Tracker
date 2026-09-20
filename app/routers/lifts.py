@@ -15,6 +15,11 @@ router = APIRouter(prefix="/api", tags=["lifts"])
 
 DOW_KEYS = {1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat", 7: "sun"}
 
+# Warm-up sets are stored above this index, keeping them clear of the working
+# sets' 0..n-1 range, which the unique key (session, exercise, set_index) would
+# otherwise make them collide with.
+WARMUP_INDEX_BASE = 1000
+
 # The active block is a single row whose start_date doesn't change mid-workout,
 # but re-reading it on every set cost a full round-trip. Short TTL so starting
 # a new block still takes effect without a restart.
@@ -103,7 +108,17 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
             )
             session_id = session["id"]
 
-            if body.set_index is not None:
+            if body.warmup:
+                # set_index is unique per (session, exercise), and working sets
+                # occupy 0..n-1 from the client's cursor. Warm-ups get their own
+                # range so a ramp-up logged first can't take index 0 and collide
+                # with the first working set.
+                set_index = await conn.fetchval(
+                    """select coalesce(max(set_index), $3 - 1) + 1 from set_log
+                        where session_id = $1 and exercise_id = $2 and set_index >= $3""",
+                    session_id, body.exercise_id, WARMUP_INDEX_BASE,
+                )
+            elif body.set_index is not None:
                 set_index = body.set_index
             else:
                 set_index = await conn.fetchval(
@@ -115,18 +130,24 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
             try:
                 new_set = await conn.fetchrow(
                     """insert into set_log (session_id, exercise_id, set_index, load_kg, reps, warmup)
-                       values ($1, $2, $3, $4, $5, false)
+                       values ($1, $2, $3, $4, $5, $6)
                        on conflict (session_id, exercise_id, set_index) do update set
-                         load_kg = excluded.load_kg, reps = excluded.reps
+                         load_kg = excluded.load_kg, reps = excluded.reps,
+                         warmup = excluded.warmup
                        returning e1rm_kg""",
                     session_id, body.exercise_id, set_index, body.weight_kg, body.reps,
+                    body.warmup,
                 )
             except asyncpg.ForeignKeyViolationError:
                 raise HTTPException(404, f"Unknown exercise_id '{body.exercise_id}'.")
             # e1RM is meaningless without a load (bodyweight/timed exercises);
             # the generated column already resolves to 0 for a NULL/<=0 load,
             # so best_e1rm_kg simply won't move for these -- correct.
-            new_e1rm = float(new_set["e1rm_kg"] or 0)
+            #
+            # A warm-up must not set a PR either. last_sets and
+            # consecutive_misses already re-query with warmup = false, but this
+            # candidate is the row just inserted, so it needs its own guard.
+            new_e1rm = 0.0 if body.warmup else float(new_set["e1rm_kg"] or 0)
 
             session_sets = await conn.fetch(
                 """select load_kg, reps from set_log
@@ -138,7 +159,9 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
                 {"load_kg": float(s["load_kg"]) if s["load_kg"] is not None else None, "reps": s["reps"]}
                 for s in session_sets
             ]
-            best_reps_this_session = max(s["reps"] for s in last_sets)
+            # None when the only sets logged so far are warm-ups: there is no
+            # working set yet to measure against the rep target.
+            best_reps_this_session = max((s["reps"] for s in last_sets), default=None)
 
             # rep-range target precedence for consecutive_misses:
             # 1) prescription_override for (week_no, exercise_id), 2) this day's
@@ -152,7 +175,9 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
                        where day_key = $3 and exercise_id = $2))""",
                 week_no, body.exercise_id, day_key,
             )
-            missed = target_rep_lo is not None and best_reps_this_session < target_rep_lo
+            missed = (target_rep_lo is not None
+                      and best_reps_this_session is not None
+                      and best_reps_this_session < target_rep_lo)
 
             # best_e1rm_kg/date: pass this set's e1rm and date as the
             # *candidate*; greatest()/CASE below decide the real winner against
@@ -183,7 +208,16 @@ async def post_set(body: SetIn, user_id: str = Depends(verify_jwt)):
                    returning last_date, last_sets, consecutive_misses, best_e1rm_kg,
                              best_e1rm_date, sessions_logged""",
                 body.exercise_id, session_id, log_date, json.dumps(last_sets),
-                new_e1rm, log_date, target_rep_lo is not None, missed,
+                new_e1rm, log_date,
+                # $7 gates whether consecutive_misses moves at all. A warm-up
+                # leaves it alone entirely: its own reps are already excluded
+                # from best_reps_this_session, but without this it would still
+                # re-judge the working sets and move the count. Likewise when
+                # no working set exists yet there is nothing to judge.
+                (not body.warmup
+                 and target_rep_lo is not None
+                 and best_reps_this_session is not None),
+                missed,
             )
 
     return LiftStateEntry(

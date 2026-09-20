@@ -17,6 +17,7 @@ class DailyOut(BaseModel):
     carbs_g: Optional[float] = None
     fat_g: Optional[float] = None
     sleep_hours: Optional[float] = None
+    steps: Optional[int] = None
     streak: int = 0
 
 
@@ -31,6 +32,7 @@ class DailyIn(BaseModel):
     carbs_g: Optional[float] = None
     fat_g: Optional[float] = None
     sleep_hours: Optional[float] = None
+    steps: Optional[int] = None
     streak: int = 0
 
 
@@ -90,6 +92,9 @@ class SetIn(BaseModel):
     set_index: Optional[int] = Field(None, ge=0)
     # The date the set belongs to; day_key and week_no are derived from it.
     date: Optional[dt.date] = None
+    # A ramp-up set: recorded, but kept out of PRs, rep-target checks and the
+    # working-set list.
+    warmup: bool = False
 
 
 class CoachUpdateEntry(BaseModel):

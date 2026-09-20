@@ -18,7 +18,7 @@ async def get_daily(
     pool = await get_pool()
     row = await pool.fetchrow(
         """select water_l, meals, meal_choices, supplements, sleep, kcal_eaten,
-                  protein_g, carbs_g, fat_g, sleep_hours, streak
+                  protein_g, carbs_g, fat_g, sleep_hours, steps, streak
              from daily_logs where user_id = $1 and log_date = $2""",
         user_id, date,
     )
@@ -35,6 +35,7 @@ async def get_daily(
         carbs_g=float(row["carbs_g"]) if row["carbs_g"] is not None else None,
         fat_g=float(row["fat_g"]) if row["fat_g"] is not None else None,
         sleep_hours=float(row["sleep_hours"]) if row["sleep_hours"] is not None else None,
+        steps=row["steps"],
         streak=row["streak"] or 0,
     )
 
@@ -49,18 +50,19 @@ async def put_daily(
     await pool.execute(
         """insert into daily_logs (user_id, log_date, water_l, meals, meal_choices,
                                    supplements, sleep, kcal_eaten, protein_g, carbs_g,
-                                   fat_g, sleep_hours, streak)
-           values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13)
+                                   fat_g, sleep_hours, steps, streak)
+           values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13, $14)
            on conflict (user_id, log_date) do update set
              water_l = excluded.water_l, meals = excluded.meals,
              meal_choices = excluded.meal_choices,
              supplements = excluded.supplements, sleep = excluded.sleep,
              kcal_eaten = excluded.kcal_eaten, protein_g = excluded.protein_g,
              carbs_g = excluded.carbs_g, fat_g = excluded.fat_g,
-             sleep_hours = excluded.sleep_hours, streak = excluded.streak""",
+             sleep_hours = excluded.sleep_hours, steps = excluded.steps,
+             streak = excluded.streak""",
         user_id, date, num(body.water_l), json.dumps(body.meals), json.dumps(body.meal_choices),
         json.dumps(body.supplements), json.dumps(body.sleep), body.kcal_eaten,
         num(body.protein_g), num(body.carbs_g), num(body.fat_g),
-        num(body.sleep_hours), body.streak,
+        num(body.sleep_hours), body.steps, body.streak,
     )
     return {"ok": True}

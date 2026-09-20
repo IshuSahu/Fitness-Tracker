@@ -1,61 +1,86 @@
-# Weekly report as a text file, and two data fixes
+# Warm-up sets, manual watch metrics, treadmill units, coach week 2
 
 ## Context
-The weekly report endpoint has existed since the FastAPI conversion but
-nothing calls it. Deliberately staying backend-only: no UI. It is generated on
-demand as a .txt to hand to a coach, whose changes come back as plan edits.
-
-For that to be actionable the report has to carry more than what was logged —
-the coach needs to see every exercise and every meal available, with ids, so
-they can name a change precisely.
+A five-item batch: a data correction, one feature, one unit bug, a schema plus
+UI addition, and this week's coach update. Backend-first; the only UI additions
+were the ones explicitly asked for.
 
 ## Steps
-- [x] `db.py`: a `num()` helper converting float -> Decimal for numeric columns.
-- [x] `weight.py` / `daily.py`: route every numeric write through it.
-- [x] Clean the existing rows: round the stored expansions.
-- [x] Null the bogus 24-hour sleep row (blank bed/wake, so not a measurement).
-- [x] `scripts/weekly_report.py`: the report generator.
-- [x] Include the current programme, the full exercise catalogue, and every
-      meal option — each with ids — plus a "how to request changes" key.
-- [x] Read meal options out of `static/index.html` rather than duplicating them.
-- [x] gitignore `reports/`.
-- [x] Verify: 10 new checks on rounding; 274 existing checks still green.
+- [x] 1. Flag the five mislabeled 1kg sets (squat, leg-press, rope-oh-ext) as
+      warm-ups. Left the unconfirmed db-shoulder-press 25kg x1 alone.
+- [x] 2. `warmup` accepted on POST /api/sets, stored on the row, with a toggle
+      beside the weight/reps inputs.
+- [x] 2. Confirmed empirically what lift_state does and does not exclude.
+- [x] 3. Treadmill duration reads minutes, not seconds.
+- [x] 4. `daily_logs.steps`; manual sleep-hours and steps inputs; sleep_hours
+      no longer derived from bed/wake; `weekly_report` replaced with the
+      steps-aware version.
+- [x] 5. Coach update for week 2 applied and confirmed.
+- [x] Verify: 32 new warm-up checks, UI checks for the toggle and units; 330
+      across twelve suites.
 
 ## Review
 
-**The report is a file, not a page.** `python scripts/weekly_report.py` writes
-`reports/weekly-<start>.txt`. Optional args take a start date or an explicit
-range; the default is the last seven days.
+All five applied in order and verified against the live database.
 
-It has six parts: what was actually trained (from the existing `weekly_report()`
-SQL function), the current programme with slot numbers, any one-off changes
-made during the week, the full 48-exercise catalogue, all 27 meal options with
-macros, and a short key showing how to phrase a change. The last part matters —
-without ids and slot numbers a coach's reply is ambiguous.
+### What the warm-up confirmation actually found
 
-**Meal options are read out of `static/index.html`, not copied.** They are a
-frontend constant, and a second copy in Python would drift within a week. The
-generator evaluates just that one constant with node and reads it back as JSON.
+Asked to confirm rather than assume, so it was probed empirically before
+touching anything. The picture was mixed:
 
-### Two data bugs the first report exposed
+- **`consecutive_misses` and `last_sets` already excluded warm-ups** — both
+  recompute from a query filtering `warmup = false`, so a pre-existing warm-up
+  row never reached them. Proved with a 100kg warm-up row: best stayed 26.67.
+- **`best_e1rm_kg` had a real gap.** It never reads the session; it passes the
+  row being inserted as the PR candidate. Harmless while `warmup` was
+  unsettable, but the moment the flag was accepted, logging a heavy ramp-up
+  would have set a PR. Now forced to 0 for warm-ups.
 
-**Sleep averaged 10.1h against a real 6.66h.** The 14 Sept row held
-`sleep_hours = 24` with blank bed/wake — the bug fixed on 19 Sept, where empty
-time fields defaulted to 00:00 so bedtime equalled wake-up and wrapped to a
-full day. One stale row moved the weekly average by three and a half hours.
-Nulled, since with no times recorded there is no measurement to keep.
+Two further faults surfaced only because the tests exercised the new flag:
 
-**Weight printed as `85.400000000000005684341886...`.** asyncpg hands a Python
-float to a numeric column at its exact binary value. Every numeric write now
-goes through `num()`, which rounds via a Decimal built from a string, so what
-gets stored is what was typed. The affected `weight_kg` and `sleep_hours` rows
-were rounded in place.
+- **Logging a warm-up as the first set of an exercise crashed** with
+  `max() iterable argument is empty` — `last_sets` excludes warm-ups, so there
+  was nothing to take a max over. Now `None`, meaning "no working set to judge".
+- **A warm-up moved the miss counter** from 3 to 4. Its own reps were correctly
+  excluded, but posting it re-triggered the evaluation against the existing
+  working sets. A warm-up is now inert for miss tracking.
 
-Both were only visible because the report printed raw stored values — the
-dashboard formats on display and hid them.
+### Warm-up indexing
+
+`set_index` is unique per (session, exercise) and working sets occupy 0..n-1
+from the client's cursor, so a ramp-up logged first would have taken index 0
+and collided with the first working set. Warm-ups are stored from index 1000
+up, keeping the two ranges apart without a schema change.
+
+In the UI a warm-up does not fill a dot, does not advance the "Set N of M"
+counter, and the toggle stays on so consecutive ramp-ups are quick to enter.
+
+### Treadmill units
+
+The label came from `exercise.mode`, which had no value meaning minutes — only
+`time`, rendered as "sec". Added a `mins` mode handled in both label sites
+(dashboard and report) and set `incline-walk` to it, rather than special-casing
+an id in two places. Plank and stretch circuit are untouched and still read
+seconds.
+
+**Worth a look: `easy-walk` has the same problem.** It is `mode = time` and
+prescribed `1 x 35-45` on Thursday, which is plainly minutes, not 35 seconds.
+Left alone because the brief said incline-walk only — say the word and it is a
+one-line change.
+
+### Watch metrics
+
+`sleep_hours` now comes from a typed input and nothing else; the bed/wake/goal/
+quality fields stay on screen for reference but no longer feed it. The derived
+`sleepHoursNow()` was deleted rather than left dangling. Blank fields send null
+rather than a guess.
 
 ### Worth knowing
-- `reports/` is gitignored: personal data, and regenerable at any time.
-- The generator needs `node` on PATH for the meal extraction. It is already a
-  dependency of the test suites.
-- Nothing about this touches the UI, per the brief.
+- Migration `005_daily_steps_and_report.sql` holds both the column and the
+  replaced function, applied to the live database.
+- The week-2 overrides are week-scoped: `session_template` is untouched, so
+  db-curl and cable-fly return to their base loads in week 3 unless renewed.
+- Pre-existing and out of brief: logging several working sets that all miss the
+  rep target increments `consecutive_misses` once per set rather than once per
+  session. Warm-ups no longer contribute, but the underlying double-count
+  remains.
