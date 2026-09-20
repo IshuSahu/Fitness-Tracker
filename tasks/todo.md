@@ -46,7 +46,9 @@ leave it. Already documented in the README.
 - [x] `index.html`: cache alternatives per `(exercise_id, viewDate)`, cleared
       on swap or date change.
 - [x] Verify: measured counts for all 48; the 09-18 double-booking repro; the
-      cardio rule; combobox in a real browser at phone width.
+      cardio rule.
+- [ ] **Not done:** combobox in a real browser at phone width. jsdom covers the
+      behaviour but not the rendering, which is where the last three bugs were.
 - [x] Update `test_swaps.py` (asserts the old narrow behaviour) and extend
       `test_swapui.js`. Keep the other suites green.
 - [x] Clean up test rows; leave the three real `exercise_swap` rows alone.
