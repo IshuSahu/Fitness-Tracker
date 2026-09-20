@@ -234,11 +234,36 @@ select option:disabled{color:var(--dim2)}
 .swaprow label{font-size:11.5px;color:var(--dim)}
 .day:disabled{opacity:.5;cursor:default}
 .swaprow .note{margin:0;font-size:11px;flex-basis:100%}
-.swapsel{background:#141A2B;border:1px solid var(--line);border-radius:8px;
-  padding:5px 7px;font-size:11.5px;color:var(--txt);font-family:'Space Grotesk',sans-serif;max-width:100%}
-.swapsel:focus{border-color:var(--gold);background:#1b2438}
-.swapsel:disabled{opacity:.45}
-.exswap{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
+.exswap{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap;position:relative}
+.swaptrigger{background:#141A2B;border:1px solid var(--line);border-radius:8px;
+  padding:5px 9px;font-size:11.5px;color:var(--txt);font-family:'Space Grotesk',sans-serif;
+  cursor:pointer;text-align:left;max-width:100%}
+.swaptrigger:hover{border-color:var(--line2)}
+.swaptrigger[aria-expanded="true"]{border-color:var(--gold)}
+.swaptrigger::after{content:" ▾";color:var(--dim2)}
+
+/* searchable swap panel -- 37-odd candidates, so the list needs a filter */
+.swappanel{
+  position:absolute;top:calc(100% + 4px);left:0;width:100%;min-width:230px;z-index:20;
+  background:#111726;border:1px solid var(--line2);border-radius:10px;
+  box-shadow:0 14px 34px rgba(0,0,0,.55);overflow:hidden;
+}
+.swapsearch{
+  width:100%;background:transparent;border:none;border-bottom:1px solid var(--line);
+  padding:8px 10px;font-size:12px;color:var(--txt);font-family:'Space Grotesk',sans-serif;
+}
+.swapsearch:focus{outline:none;border-bottom-color:var(--gold)}
+.swaplist{list-style:none;margin:0;padding:4px;max-height:248px;overflow-y:auto}
+.swapgroup{
+  font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim2);
+  padding:7px 8px 4px;
+}
+.swapopt{padding:6px 8px;border-radius:7px;cursor:pointer;line-height:1.3}
+.swapopt:hover,.swapopt[data-active="true"]{background:rgba(255,194,75,.14)}
+.swapopt[data-active="true"]{outline:1px solid rgba(255,194,75,.45)}
+.swapopt b{font-weight:500;font-size:12px}
+.swapopt span{display:block;font-size:10.5px;color:var(--dim)}
+.swapempty{padding:12px 10px;font-size:11.5px;color:var(--dim)}
 .swapped-tag{font-size:10.5px;color:var(--gold)}
 
 /* warm-up / cool-down checklists */
@@ -1483,6 +1508,7 @@ const failedSaves = {};      // "exercise_id-index" -> true, save that didn't la
 // Cursors are positions within a given date's sets, so a date change retires
 // them; they re-derive from that date's logged sets on the next render.
 function clearSetCursors(){
+  clearAltCache();
   for(const k in setCursor) delete setCursor[k];
   for(const k in failedSaves) delete failedSaves[k];
 }
@@ -1580,6 +1606,145 @@ function buildPrep(){
   render('cool', 'Cool-down', p.cool, $('cooldown'));
 }
 
+/* -------------------------------------------------------
+   Swap picker: a searchable dropdown over the catalogue.
+   ~37 candidates per exercise, which a plain list can't carry, and a native
+   <select> can't be typed into. Nothing else in this page is a popup, so this
+   owns its own outside-click and keyboard handling.
+   ------------------------------------------------------- */
+const ALT_CACHE = new Map();    // "exercise_id|date" -> alternatives
+let swapPanel = null;           // {el, trigger, options, active, ex}
+
+function clearAltCache(){ ALT_CACHE.clear(); }
+
+async function altsFor(ex){
+  const key = ex.exercise_id + '|' + viewDate;
+  if(!ALT_CACHE.has(key)){
+    const res = await api(`/api/exercise-alternatives/${ex.exercise_id}?date=${viewDate}`);
+    ALT_CACHE.set(key, res.alternatives);
+  }
+  return ALT_CACHE.get(key);
+}
+
+function closeSwapPanel(){
+  if(!swapPanel) return;
+  swapPanel.trigger.setAttribute('aria-expanded', 'false');
+  swapPanel.el.remove();
+  swapPanel = null;
+}
+
+function swapMatches(alts, q){
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if(!terms.length) return alts;
+  // every term must appear somewhere, so "cable chest" narrows rather than widens
+  return alts.filter(a => {
+    const hay = `${a.name} ${a.equipment} ${a.kind} ${a.muscle_group} ${a.muscles.join(' ')}`.toLowerCase();
+    return terms.every(t => hay.includes(t));
+  });
+}
+
+function renderSwapOptions(q){
+  const {el, ex} = swapPanel;
+  const list = el.querySelector('.swaplist');
+  const shown = swapMatches(swapPanel.alts, q);
+  swapPanel.options = shown;
+  swapPanel.active = shown.length ? 0 : -1;
+  if(!shown.length){
+    list.innerHTML = `<li class="swapempty">Nothing matches “${q}”.</li>`;
+    return;
+  }
+  const row = (a, i) => `
+    <li class="swapopt" role="option" id="swapopt-${i}" data-alt="${a.id}"
+        aria-selected="false" data-active="${i === 0}">
+      <b>${a.name}</b><span>${a.equipment} · ${a.muscles.join(', ')}</span>
+    </li>`;
+  const sug = shown.filter(a => a.suggested), rest = shown.filter(a => !a.suggested);
+  let i = -1;
+  list.innerHTML =
+    (sug.length ? `<li class="swapgroup" role="presentation">Trains the same muscles</li>`
+                  + sug.map(a => row(a, ++i)).join('') : '')
+    + (rest.length ? `<li class="swapgroup" role="presentation">${sug.length ? 'Everything else' : 'All exercises'}</li>`
+                  + rest.map(a => row(a, ++i)).join('') : '');
+  swapPanel.options = [...sug, ...rest];
+  list.querySelectorAll('[data-alt]').forEach(li =>
+    li.addEventListener('click', () => chooseSwap(li.dataset.alt)));
+}
+
+function moveSwapActive(delta){
+  if(!swapPanel || !swapPanel.options.length) return;
+  const n = swapPanel.options.length;
+  swapPanel.active = (swapPanel.active + delta + n) % n;
+  const list = swapPanel.el.querySelector('.swaplist');
+  list.querySelectorAll('[data-alt]').forEach((li, i) => {
+    const on = i === swapPanel.active;
+    li.dataset.active = on;
+    if(on){
+      li.scrollIntoView({block:'nearest'});
+      swapPanel.el.querySelector('.swapsearch').setAttribute('aria-activedescendant', li.id);
+    }
+  });
+}
+
+function chooseSwap(exerciseId){
+  const ex = swapPanel.ex;
+  closeSwapPanel();
+  swapExercise(ex.order_no, exerciseId);
+}
+
+async function openSwapPanel(trigger, ex){
+  if(swapPanel && swapPanel.trigger === trigger){ closeSwapPanel(); return; }
+  closeSwapPanel();
+  const el = document.createElement('div');
+  el.className = 'swappanel';
+  el.innerHTML = `
+    <input class="swapsearch" type="text" role="combobox" aria-expanded="true"
+      aria-controls="swaplist" aria-autocomplete="list" autocomplete="off"
+      placeholder="Search exercises…" aria-label="Search for a replacement exercise">
+    <ul class="swaplist" id="swaplist" role="listbox" aria-label="Replacement exercises">
+      <li class="swapempty">Loading…</li>
+    </ul>`;
+  trigger.parentNode.appendChild(el);
+  trigger.setAttribute('aria-expanded', 'true');
+  swapPanel = {el, trigger, ex, alts: [], options: [], active: -1};
+
+  const search = el.querySelector('.swapsearch');
+  search.focus();
+  search.addEventListener('input', () => renderSwapOptions(search.value));
+  search.addEventListener('keydown', e => {
+    if(e.key === 'ArrowDown'){ e.preventDefault(); moveSwapActive(1); }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); moveSwapActive(-1); }
+    else if(e.key === 'Enter'){
+      e.preventDefault();
+      const a = swapPanel.options[swapPanel.active];
+      if(a) chooseSwap(a.id);
+    }
+    else if(e.key === 'Escape'){ e.preventDefault(); const t = swapPanel.trigger; closeSwapPanel(); t.focus(); }
+    else if(e.key === 'Tab'){ closeSwapPanel(); }
+  });
+
+  try{
+    const alts = await altsFor(ex);
+    if(!swapPanel || swapPanel.trigger !== trigger) return;   // closed while loading
+    swapPanel.alts = alts;
+    if(!alts.length){
+      el.querySelector('.swaplist').innerHTML =
+        '<li class="swapempty">Every other exercise is already in this session.</li>';
+      return;
+    }
+    renderSwapOptions('');
+  }catch(e){
+    setStatus('offline');
+    if(swapPanel) el.querySelector('.swaplist').innerHTML =
+      '<li class="swapempty">Couldn’t load alternatives. Check your connection.</li>';
+  }
+}
+
+// the only outside-click handler in the page; the panel is the only popup
+document.addEventListener('click', e => {
+  if(!swapPanel) return;
+  if(!swapPanel.el.contains(e.target) && e.target !== swapPanel.trigger) closeSwapPanel();
+});
+
 // exercise_id null reverts the slot to whatever the programme says
 async function swapExercise(orderNo, exerciseId){
   setStatus('saving');
@@ -1592,12 +1757,14 @@ async function swapExercise(orderNo, exerciseId){
     }
     setStatus('saved');
   }catch(e){ setStatus('offline'); }
+  clearAltCache();   // the session changed, so every cached candidate list is stale
   clearSetCursors();
   await loadPlan(curDay);
   buildExercises();
 }
 
 function buildExercises(){
+  closeSwapPanel();   // the panel lives inside #exlist, which is about to be replaced
   const list = PLAN_EXERCISES;
   doneMap[curDay] = doneMap[curDay] || list.map(() => false);
   const done = doneMap[curDay];
@@ -1658,9 +1825,9 @@ function buildExercises(){
     const canSwap = !locked && !logged.length;
     const swapUi = canSwap ? `
         <div class="exswap">
-          <select class="swapsel" data-swap="${i}" aria-label="Swap ${x.name} for another exercise">
-            <option value="">Swap this exercise…</option>
-          </select>
+          <button class="swaptrigger" type="button" data-swap="${i}"
+            aria-haspopup="listbox" aria-expanded="false"
+            aria-label="Swap ${x.name} for another exercise">Swap this exercise…</button>
           ${x.swapped ? `<button class="navbtn" data-unswap="${i}">Undo</button>` : ''}
         </div>` : '';
     const swappedTag = x.swapped
@@ -1714,26 +1881,8 @@ function buildExercises(){
       setCursor[x.exercise_id] = Math.max(0, cur - 1);
       buildExercises();
     }));
-  // alternatives are fetched when the dropdown is first opened rather than
-  // for every exercise on every render
-  $('exlist').querySelectorAll('[data-swap]').forEach(sel => {
-    sel.addEventListener('focus', async () => {
-      if(sel.dataset.loaded) return;
-      sel.dataset.loaded = '1';
-      const x = list[+sel.dataset.swap];
-      try{
-        const res = await api(`/api/exercise-alternatives/${x.exercise_id}?date=${viewDate}`);
-        sel.insertAdjacentHTML('beforeend', res.alternatives.map(a =>
-          `<option value="${a.id}">${a.name} · ${a.equipment}</option>`).join(''));
-        if(!res.alternatives.length){
-          sel.insertAdjacentHTML('beforeend', '<option value="" disabled>No alternatives in the catalogue</option>');
-        }
-      }catch(e){ sel.dataset.loaded = ''; setStatus('offline'); }
-    });
-    sel.addEventListener('change', () => {
-      if(sel.value) swapExercise(list[+sel.dataset.swap].order_no, sel.value);
-    });
-  });
+  $('exlist').querySelectorAll('[data-swap]').forEach(btn =>
+    btn.addEventListener('click', () => openSwapPanel(btn, list[+btn.dataset.swap])));
   $('exlist').querySelectorAll('[data-unswap]').forEach(b =>
     b.addEventListener('click', () => swapExercise(list[+b.dataset.unswap].order_no, null)));
 

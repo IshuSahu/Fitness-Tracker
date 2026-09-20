@@ -1,123 +1,111 @@
-# Flexibility pass: swap the day, swap an exercise, swap a meal, honest boot
+# Make "swap this exercise" usable: wider candidates, no double-booking, search
 
 ## Context
-Four asks, all about rigidity — plus one real bug found while researching them.
+The swap dropdown offers almost nothing. Machine chest press showed three
+options; ten exercises in the catalogue return **none at all**. Asked for the
+full list minus what's already in the session, plus a searchable dropdown.
 
-1. Miss a training day and there's no way to run that workout on another date;
-   which workout runs is derived purely from the weekday. Rule given: **once a
-   set is logged for that date, the day is locked in.**
-2. No way to substitute an exercise within a session (flat DB press -> machine),
-   with a dropdown of sensible alternatives. Scoped to that day only.
-3. Meals are a fixed list — no alternative if the overnight oats weren't soaked.
-4. With the server down the page shows **fabricated data that looks real**
-   (85.4 kg, a fake downward sparkline, 2,200 kcal, streak 12) under a green
-   "Saved locally" chip. Wanted: a proper skeleton + honest failure state.
+Render (first screenshot) needs no work: `/health` returns
+`{"ok":true,"db":true}` in 2.5s and the deployed page is byte-identical to
+local. That "APPLICATION LOADING" screen is Render's own, shown while a
+sleeping free-tier container wakes — not our page, can't be restyled. Chose to
+leave it. Already documented in the README.
 
-**Standing constraint: fully vegetarian, no eggs.** Governs all meal content.
-
-## Findings that shaped the plan
-- `bootDashboard` reveals `#dashboard` *before the first fetch starts*, and
-  every loader swallows its error, so offline you get a complete plausible
-  dashboard with nothing indicating the backend is dead.
-- `/health` returns `{"ok":true}` unconditionally — it never checks the DB, and
-  no frontend code calls it.
-- `muscle_group` is too coarse for an alternatives dropdown (29 of 48 rows are
-  "upper"); `exercise.muscles text[]` + `kind` + `equipment` give a real rule.
-- **Do not reuse `coach.py`'s swap** — it mutates `session_template`
-  permanently and globally, no undo, and ignores the `week_no` it accepts.
-- `prescription_override` can't express substitution (PK `(week_no,
-  exercise_id)`, no day_key, no replacement column).
+## Findings
+- **The muscle filter is the culprit.** `e.muscles && $3` requires an exact
+  free-text match, and the vocabulary is hyper-specific: `machine-chest-press`
+  is `Mid chest, Triceps` while `pec-deck`/`cable-fly` are `Chest` and
+  `low-high-fly` is `Upper chest` — none intersect, so the obvious chest
+  substitutes are filtered out. Across all 48 exercises: **mean 2.5, median 1,
+  10 return zero**, 31 of 48 return fewer than three.
+- `muscle_group` can't replace it either — 29 of 48 rows are just `upper`.
+- **The exclusion misses swaps, both ways.** It reads `session_template` only,
+  never `exercise_swap`. Live repro on 2026-09-18: slot 2 is swapped to
+  `machine-chest-press`, yet it's still offered for slot 1 — accepting it puts
+  the same exercise in the session twice. And on 2026-09-19, `ng-pulldown` /
+  `sa-cable-row` were swapped *away* but stay excluded.
 
 ## Steps
-
-### 1. Honest boot
-- [x] `main.py`: `/health` actually pings the DB (`select 1`), 503 when it can't.
-- [x] `index.html`: `#skeleton` node + shimmer CSS, with a
-      `prefers-reduced-motion` static fallback.
-- [x] `bootDashboard`: skeleton -> load -> reveal dashboard **only on success**;
-      failure shows a "can't reach the server" panel with Retry.
-- [x] Strip every fabricated default (`S.weight/start/lastWeek/history`,
-      `streak="12"`, `#wNow` 85.4, "3 confirmed", hardcoded macro figures).
-- [x] `loadAllFromApi` propagates failure instead of swallowing it.
-
-### 2. Meal options
-- [x] Migration `002_daily_logs_meal_choices.sql`: add `meal_choices jsonb`.
-- [ ] `schemas.py`/`daily.py`: `meal_choices: list[int]` through DailyIn/Out.
-- [x] `index.html`: `MEAL_OPTIONS` constant (all vegetarian, macro-matched per
-      slot), `<select>` per meal card, choice persisted.
-- [x] Collapse the duplicate macro summers (`recalc()` / `eatenTotals()`) into
-      one function reading the chosen variant.
-
-### 3. Reassign a date's workout
-- [x] Migration `003_day_plan.sql`: `day_plan(log_date pk, day_key)`.
-- [x] `routers/day_plan.py`: GET / PUT (409 once sets exist) / DELETE.
-- [x] `lifts.py`: `post_set` resolves day_key from `day_plan` first.
-- [x] `index.html`: workout select in the session header, disabled once locked.
-
-### 4. Substitute an exercise
-- [x] Migration `004_exercise_swap.sql`: `exercise_swap(log_date, order_no, exercise_id)`.
-- [x] `plan.py`: optional `date`, left-join the swap and substitute the slot.
-- [x] `routers/exercises.py`: alternatives by shared `muscles` + same `kind`;
-      PUT/DELETE swap with a 409 guard once that slot has sets.
-- [x] `index.html`: per-exercise swap control + dropdown.
-
-### Verification
-- [x] Live-DB checks for the new endpoints and their 409 guards.
-- [x] jsdom checks for the dropdowns, skeleton and error panel.
-- [ ] Real browser: all three boot states, no fake numbers anywhere.
-- [x] Clean up all test rows.
+- [x] `exercises.py`: factor a `resolved_session_exercises(conn, date)` helper
+      (`coalesce(sw.exercise_id, st.exercise_id)`) — the set `_slot_exercise`
+      already computes one slot at a time.
+- [x] `exercises.py`: drop the `kind` and `muscles` filters; exclude self, the
+      resolved session, and `muscle_group='cardio'` (unless the source is
+      cardio). Order: same group+kind, then same group, then the rest; within
+      each by shared-muscle count then name. Return `kind`, `muscle_group`,
+      `muscles`, `suggested`.
+- [x] `index.html`: replace the native `<select>` with a combobox — trigger
+      button, absolutely-positioned panel, search input, `role="listbox"` rows
+      grouped under Suggested / All exercises.
+- [x] `index.html`: search across name, equipment, muscles, muscle_group,
+      debounced with the existing `debounce()`.
+- [x] `index.html`: keyboard (Up/Down/Enter/Escape/Tab) + click-outside via one
+      delegated document listener. No such pattern exists in the file yet.
+- [x] `index.html`: `closeSwapPanel()` at the top of `buildExercises()` — the
+      failed-set-POST `.catch()` re-renders at an arbitrary moment.
+- [x] `index.html`: cache alternatives per `(exercise_id, viewDate)`, cleared
+      on swap or date change.
+- [x] Verify: measured counts for all 48; the 09-18 double-booking repro; the
+      cardio rule; combobox in a real browser at phone width.
+- [x] Update `test_swaps.py` (asserts the old narrow behaviour) and extend
+      `test_swapui.js`. Keep the other suites green.
+- [x] Clean up test rows; leave the three real `exercise_swap` rows alone.
 
 ## Review
 
-All four shipped and verified. 189 checks across seven suites, all passing:
-53 against the live database, 136 driving the real page in jsdom.
+Done and verified. 274 checks across ten suites, all passing.
 
-**1. Honest boot.** The complaint was cosmetic; the cause wasn't. The page
-revealed itself *before the first fetch started*, and every loader swallowed
-its error, so with the server down you got a complete, plausible dashboard --
-85.4 kg, a downward sparkline, a 12-day streak -- under a green "Saved
-locally" chip. The headline weight was a hardcoded `data-count="85.4"` that no
-code ever updated, so it read 85.4 no matter what you'd logged. The dashboard
-now appears only once real data is in hand, `/health` actually runs `select 1`,
-and failure states distinguish an unreachable server from a reachable one that
-can't get to the database. Every fabricated default is gone.
+**The dropdown was broken, not narrow.** It required a matching `kind` **and**
+an overlapping `muscles` entry, but `muscles` is free text and hyper-specific,
+so near-identical movements never matched: `machine-chest-press` is
+`Mid chest, Triceps` while `pec-deck` and `cable-fly` are just `Chest`. The
+obvious substitutes were filtered out by the very field meant to find them.
+Measured across all 48 exercises: **mean 2.5 candidates, median 1, and ten
+returning nothing at all.**
 
-**2. Meal options.** Each of the six slots carries 4-5 alternatives that hit
-roughly the same macros, so swapping never quietly wrecks the day's totals.
-All vegetarian, no egg -- asserted by a test so it stays that way. Where a
-variant genuinely can't match, it says so: the curd-and-honey post-workout
-option is labelled the low-protein fallback, and "Skip tonight" is a real
-zero-calorie choice rather than a box left untouched.
+Now the whole catalogue is offered minus the session, minus cardio (unless
+you're swapping cardio, which would otherwise return nothing). Measured after:
+**mean 36.4, median 36, minimum 36, no empties.**
 
-**3. Reassigning a date's workout.** One row per date in `day_plan`, so
-reverting is deleting the row and swapping two days is two rows. `post_set`
-resolves `day_key` the same way, so a set logged on a reassigned day is filed
-under the programme actually being run. Locked once any set exists, per the
-stated rule.
+**Ranking is on word overlap, not exact labels.** Same reason: "Mid chest" and
+"Chest" are the same muscle spelled differently. Qualifiers (mid/upper/long/
+head/front/side/rear) are dropped, or "Mid chest" pairs with "Mid back". A
+chest press now leads with low-incline press, cable fly and pec deck instead of
+lat pulldown and rows. `suggested` means "trains at least one of the same
+muscles" rather than the old "same group and kind", which is what a lifter
+actually means by a substitute.
 
-**4. Substituting an exercise.** Per date, per slot, in `exercise_swap` --
-`session_template` is never touched. Alternatives are derived from the
-catalogue: shared `muscles` entries plus matching `kind`, excluding anything
-already programmed that day.
+**Double-booking is fixed, both directions.** The exclusion read
+`session_template` only, never `exercise_swap`, so on 2026-09-18 —
+reproduced against your live data — `machine-chest-press` was swapped into
+slot 2 yet still offered for slot 1; accepting it would have put the same
+exercise in the session twice. The inverse was also wrong: exercises swapped
+*away* stayed excluded. Both now resolve through
+`resolved_session_exercises()`, which is the set `_slot_exercise` already
+computed one slot at a time.
+
+**The picker is a real combobox.** Native `<select>` can't be typed into, and a
+37-row list needs filtering. Search matches name, equipment, kind, muscle group
+and muscles, and multiple terms narrow rather than widen ("cable chest").
+Arrow keys, Enter, Escape, Tab and click-outside all work; results are grouped
+under "Trains the same muscles" / "Everything else".
 
 ### Worth knowing
 
-- **The day tabs now reassign the date, not just preview it.** Built as two
-  separate controls first, which created a footgun: clicking a tab showed
-  another programme's exercises, but a set logged there was filed under the
-  date's *real* programme, against an exercise that session didn't contain.
-  Unified to one control -- picking a day IS choosing what you're doing.
-  The redundant select was removed.
-- **`loadDayPlan` validates the `day_key` it receives.** `curDay` drives every
-  subsequent render; an unusable value took the whole session card down. Found
-  because a test harness returned an empty object.
-- **Not verified in a real browser.** jsdom drives the actual page code, but
-  that tests behaviour, not rendering. The skeleton shimmer, the new selects
-  and the disabled day tabs have not been looked at on a real screen or at
-  phone width.
-- Migrations 002-004 are applied to the live database; existing rows were
-  preserved and verified.
-- `coach.py`'s swap is still a loaded gun -- permanent, global, no undo,
-  ignores the `week_no` it accepts. Unused by the UI. The new per-date swap is
-  what it should be rebuilt on if anything ever calls it.
-- `session_template` still has no DDL in the repo.
+- **Render needed no work.** `/health` returned `{"ok":true,"db":true}` in 2.5s
+  and the deployed page was byte-identical to local. That "APPLICATION LOADING"
+  screen is Render's own, shown while a sleeping free-tier container wakes —
+  not our page, and not restyleable. Left as is by choice.
+- **`buildExercises()` closes the panel before re-rendering.** It rewrites
+  `#exlist` wholesale, and the failed-set-POST `.catch()` can fire it at any
+  moment, which would otherwise orphan an open dropdown.
+- Alternatives are cached per `(exercise_id, date)` and cleared on any swap or
+  date change, since either changes what's in the session.
+- This is the page's first popup, so it brought the first `document` click
+  listener and the first arrow-key handling with it.
+- **Still not verified in a real browser.** jsdom drives the real handlers, but
+  the panel's positioning, z-index and 248px scroll cap are unverified on a
+  real screen — and the last three bugs you found were all rendering. Worth a
+  look at phone width especially.
+- Three test suites asserted the old narrow behaviour and were updated:
+  `test_swaps.py`, `test_swapui.js`, `test_empty.js`.

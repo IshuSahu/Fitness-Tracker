@@ -25,6 +25,20 @@ class SwapIn(BaseModel):
     exercise_id: str
 
 
+# "Mid chest" and "Upper chest" are different strings but the same muscle, so
+# closeness is measured on words rather than whole labels. Qualifiers like
+# "mid" and "long" are dropped -- on their own they say nothing about what a
+# movement trains, and matching on them pairs "Mid chest" with "Mid back".
+_MUSCLE_QUALIFIERS = {"mid", "upper", "lower", "long", "head", "deep", "front", "side", "rear"}
+
+
+def _muscle_words(muscles) -> set[str]:
+    words = set()
+    for label in (muscles or []):
+        words.update(w for w in label.lower().split() if w not in _MUSCLE_QUALIFIERS)
+    return words
+
+
 @router.get("/exercise-alternatives/{exercise_id}")
 async def alternatives(
     exercise_id: str,
@@ -34,31 +48,53 @@ async def alternatives(
     pool = await get_pool()
     async with pool.acquire() as conn:
         src = await conn.fetchrow(
-            "select id, name, kind, muscles, equipment from exercise where id = $1", exercise_id
+            """select id, name, kind, muscles, equipment, muscle_group
+                 from exercise where id = $1""",
+            exercise_id,
         )
         if not src:
             raise HTTPException(404, f"Unknown exercise_id '{exercise_id}'.")
-        day_key = await resolve_day_key(conn, date)
+        in_session = await resolved_session_exercises(conn, date)
+
+        # Previously this also required a matching `kind` and an overlapping
+        # `muscles` entry. `muscles` is free text and hyper-specific -- "Mid
+        # chest" never intersects "Chest" or "Upper chest" -- so the obvious
+        # substitutes were filtered out: ten exercises returned nothing at all
+        # and the median was one. The catalogue is only 48 rows, so offer all
+        # of it and rank by closeness instead of excluding.
         rows = await conn.fetch(
-            """select e.id, e.name, e.equipment, e.muscles, e.kind
+            """select e.id, e.name, e.equipment, e.muscles, e.kind, e.muscle_group
                  from exercise e
                 where e.id <> $1
-                  and e.kind = $2
-                  and e.muscles && $3::text[]
-                  -- don't offer something already programmed for the day, or
-                  -- it'd appear twice in the same session
-                  and e.id not in (
-                    select st.exercise_id from session_template st where st.day_key = $4)
-                order by cardinality(array(select unnest(e.muscles) intersect select unnest($3::text[]))) desc,
-                         e.name""",
-            exercise_id, src["kind"], list(src["muscles"] or []), day_key,
+                  -- anything already in this date's session, swaps included,
+                  -- would otherwise end up in it twice
+                  and e.id <> all($2::text[])
+                  -- walks and stretch circuits aren't substitutes for a lift,
+                  -- but they are for each other
+                  and ($3 or e.muscle_group <> 'cardio')""",
+            exercise_id, list(in_session), src["muscle_group"] == "cardio",
         )
+
+    src_words = _muscle_words(src["muscles"])
+
+    def rank(r):
+        overlap = len(src_words & _muscle_words(r["muscles"]))
+        return (-overlap,
+                0 if r["muscle_group"] == src["muscle_group"] else 1,
+                0 if r["kind"] == src["kind"] else 1,
+                r["name"])
+
+    ordered = sorted(rows, key=rank)
     return {
         "replacing": {"id": src["id"], "name": src["name"], "equipment": src["equipment"]},
         "alternatives": [
             {"id": r["id"], "name": r["name"], "equipment": r["equipment"],
-             "muscles": list(r["muscles"] or [])}
-            for r in rows
+             "kind": r["kind"], "muscle_group": r["muscle_group"],
+             "muscles": list(r["muscles"] or []),
+             # trains at least one of the same muscles, so it's a like-for-like
+             # substitute rather than just something else you could do instead
+             "suggested": bool(src_words & _muscle_words(r["muscles"]))}
+            for r in ordered
         ],
     }
 
@@ -113,8 +149,25 @@ async def delete_swap(
     return {"order_no": order_no, "reverted": True}
 
 
+async def resolved_session_exercises(conn, date: dt.date) -> list[str]:
+    """Every exercise actually in this date's session -- the template for its
+    programme, with any per-slot swaps applied. The template alone isn't the
+    session: a swapped-in exercise is in it without being in the template, and
+    a swapped-out one is the reverse."""
+    day_key = await resolve_day_key(conn, date)
+    rows = await conn.fetch(
+        """select coalesce(sw.exercise_id, st.exercise_id) as exercise_id
+             from session_template st
+             left join exercise_swap sw
+               on sw.log_date = $1 and sw.order_no = st.order_no
+            where st.day_key = $2""",
+        date, day_key,
+    )
+    return [r["exercise_id"] for r in rows]
+
+
 async def _slot_exercise(conn, date: dt.date, order_no: int) -> str | None:
-    """What that slot currently resolves to -- the swap if one is set, else the
+    """What one slot currently resolves to -- the swap if one is set, else the
     template's exercise for the day's programme."""
     swapped = await conn.fetchval(
         "select exercise_id from exercise_swap where log_date = $1 and order_no = $2",
