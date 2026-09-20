@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# generated weekly reports (personal data, regenerable)
+reports/

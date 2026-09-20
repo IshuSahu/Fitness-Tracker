@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from ..auth import verify_jwt
-from ..db import get_pool
+from ..db import get_pool, num
 from ..schemas import WeightEntry, WeightIn
 
 router = APIRouter(prefix="/api/weight", tags=["weight"])
@@ -48,6 +48,6 @@ async def put_weight(
         """insert into weight_logs (user_id, log_date, weight_kg)
            values ($1, $2, $3)
            on conflict (user_id, log_date) do update set weight_kg = excluded.weight_kg""",
-        user_id, date, body.weight_kg,
+        user_id, date, num(body.weight_kg),
     )
     return {"ok": True}

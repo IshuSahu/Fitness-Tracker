@@ -4,7 +4,7 @@ import json
 from fastapi import APIRouter, Depends, Query
 
 from ..auth import verify_jwt
-from ..db import get_pool
+from ..db import get_pool, num
 from ..schemas import DailyOut, DailyIn
 
 router = APIRouter(prefix="/api/daily", tags=["daily"])
@@ -58,8 +58,9 @@ async def put_daily(
              kcal_eaten = excluded.kcal_eaten, protein_g = excluded.protein_g,
              carbs_g = excluded.carbs_g, fat_g = excluded.fat_g,
              sleep_hours = excluded.sleep_hours, streak = excluded.streak""",
-        user_id, date, body.water_l, json.dumps(body.meals), json.dumps(body.meal_choices),
+        user_id, date, num(body.water_l), json.dumps(body.meals), json.dumps(body.meal_choices),
         json.dumps(body.supplements), json.dumps(body.sleep), body.kcal_eaten,
-        body.protein_g, body.carbs_g, body.fat_g, body.sleep_hours, body.streak,
+        num(body.protein_g), num(body.carbs_g), num(body.fat_g),
+        num(body.sleep_hours), body.streak,
     )
     return {"ok": True}
