@@ -31,7 +31,6 @@ class DailyOut(BaseModel):
     water_l: float = 0
     meal_log: dict[str, MealSlot] = {}
     supplements: list[bool] = []
-    sleep: dict = {}
     kcal_eaten: Optional[int] = None
     protein_g: Optional[float] = None
     carbs_g: Optional[float] = None
@@ -47,7 +46,6 @@ class DailyIn(BaseModel):
     # existed) -- the stored day is kept rather than overwritten with nothing.
     meal_log: Optional[dict[str, MealSlot]] = None
     supplements: list[bool] = []
-    sleep: dict = {}
     # kcal_eaten / protein_g / carbs_g / fat_g are not accepted from the client:
     # the server derives them from meal_log so they can never disagree with it.
     sleep_hours: Optional[float] = None

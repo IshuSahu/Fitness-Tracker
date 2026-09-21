@@ -85,13 +85,12 @@ h1,h2,h3{margin:0;font-family:'Space Grotesk',sans-serif;font-weight:600;letter-
 
 /* ---------- grid ---------- */
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
-.c4{grid-column:span 4}.c5{grid-column:span 5}.c7{grid-column:span 7}.c8{grid-column:span 8}
+.c4{grid-column:span 4}.c5{grid-column:span 5}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.28);min-width:0;
 }
 .card.acc-cyan{background:linear-gradient(170deg,rgba(61,216,255,.075),var(--card) 58%);border-color:rgba(61,216,255,.2)}
-.card.acc-violet{background:linear-gradient(170deg,rgba(167,139,250,.08),var(--card) 58%);border-color:rgba(167,139,250,.2)}
 .chead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
 .chead h2{font-size:14.5px}
 .tag{font-size:11px;color:var(--dim2);letter-spacing:.08em}
@@ -116,13 +115,11 @@ select option:checked{background-color:#23304d}
 select option:disabled{color:var(--dim2)}
 .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
 .fld label{font-size:10.5px;color:var(--dim2)}
-.fld input,.fld select{
+.fld input{
   background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:9px;
   padding:7px 9px;font-size:13px;font-family:'Space Grotesk',sans-serif;width:100%;
 }
-.fld select{background:#141A2B}
 .fld input:focus{border-color:var(--gold);background:rgba(255,255,255,.08)}
-.fld select:focus{border-color:var(--gold);background:#1b2438}
 .bar{height:7px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
 .bar i{display:block;height:100%;width:0;border-radius:99px;transition:width .85s var(--ease)}
 
@@ -374,23 +371,6 @@ select option:disabled{color:var(--dim2)}
 .supp-d{font-size:11.5px;color:var(--dim);margin-top:2px}
 
 /* ---------- sleep ---------- */
-.sleep-top{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.sleep-top .big{color:var(--violet)}
-.sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
-.sbars{display:flex;align-items:flex-end;gap:6px;height:78px;margin-top:6px;position:relative}
-.sbar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:5px;align-items:center}
-.sbar i{
-  width:100%;border-radius:6px 6px 3px 3px;height:0;
-  background:linear-gradient(180deg,var(--violet),rgba(167,139,250,.35));
-  transition:height .8s var(--ease);
-}
-.sbar.short i{background:linear-gradient(180deg,#F87171,rgba(248,113,113,.3))}
-.sbar span{font-size:9.5px;color:var(--dim2)}
-.goalline{position:absolute;left:0;right:0;border-top:1px dashed rgba(167,139,250,.5)}
-.stages{display:flex;height:10px;border-radius:99px;overflow:hidden;margin-top:6px}
-.stages i{height:100%}
-.slegend{display:flex;gap:12px;font-size:11px;color:var(--dim2);margin-top:7px;flex-wrap:wrap}
-.slegend s{text-decoration:none;display:inline-block;width:8px;height:8px;border-radius:3px;margin-right:5px}
 
 /* ---------- insights ---------- */
 .ins-wrap{border-radius:20px;padding:1.5px;background:linear-gradient(135deg,var(--ember),var(--gold) 42%,rgba(167,139,250,.6) 100%)}
@@ -410,14 +390,14 @@ select option:disabled{color:var(--dim2)}
 
 /* ---------- responsive ---------- */
 @media (max-width:1080px){
-  .c4,.c5,.c7,.c8{grid-column:span 6}
+  .c4,.c5,.c7,.c8,.c12{grid-column:span 6}
   .grid{grid-template-columns:repeat(6,1fr)}
   .sess{grid-template-columns:1fr}
 }
 @media (max-width:720px){
   .wrap{padding:14px 12px 44px}
   .grid{grid-template-columns:1fr;gap:13px}
-  .c4,.c5,.c7,.c8{grid-column:span 1}
+  .c4,.c5,.c7,.c8,.c12{grid-column:span 1}
   .top{padding:14px;border-radius:18px}
   .top-mid{margin-left:0;width:100%}
   .big{font-size:34px}
@@ -722,43 +702,15 @@ select option:disabled{color:var(--dim2)}
     <p class="note">Values are approximations for standard home portions — your atta, oil quantity, paneer brand and dal thickness will move these by 10&ndash;15%. Weigh oats, paneer, soya and peanut butter for a week and the rest will look after itself. Everything here is on your list except soya chunks, which I&rsquo;ve added because they are the cheapest vegetarian protein available to you (~52 g protein per 100 g dry, around ₹15).</p>
   </section>
 
-  <!-- ============ 8. SLEEP ============ -->
-  <section class="card acc-violet c5" aria-labelledby="h-sl">
-    <div class="chead"><h2 id="h-sl">Sleep</h2><span class="demo">from your logged nights</span></div>
-    <div class="sleep-top">
-      <div class="big num"><span id="slDur">––</span></div>
-      <div style="text-align:right;font-size:12px;color:var(--dim)">
-        <div>Goal <b class="num" style="color:var(--txt)" id="slGoalLbl">7.5 h</b></div>
-        <div>7-day gap <b class="num" style="color:#F87171" id="slDebt">—</b></div>
-      </div>
-    </div>
-    <div class="sgrid">
-      <div class="fld"><label for="bed">Bedtime</label><input id="bed" type="time"></div>
-      <div class="fld"><label for="wake">Wake-up</label><input id="wake" type="time"></div>
-      <div class="fld"><label for="slGoal">Sleep goal (h)</label><input id="slGoal" type="number" value="7.5" min="5" max="10" step="0.25"></div>
-      <div class="fld"><label for="slQual">Sleep quality</label>
-        <select id="slQual">
-          <option>Restless</option><option selected>Okay</option><option>Good</option><option>Excellent</option>
-        </select>
-      </div>
-    </div>
-    <div>
-      <div class="tag" style="margin-bottom:4px">Last 7 nights vs goal</div>
-      <p class="note" id="slHint" style="margin:6px 0 0"></p>
-      <div class="sbars" id="sbars"><div class="goalline" id="goalline"></div></div>
-    </div>
-    <p class="note">Duration and the 7-day gap come from the times you enter. Sleep stages aren’t shown because nothing here measures them — a stage split would be a guess dressed up as data. Consistent hours are what move the needle on a 6-day split in a deficit.</p>
-  </section>
-
   <!-- ============ 7. SUPPLEMENTS ============ -->
-  <section class="card c4" aria-labelledby="h-su">
+  <section class="card c5" aria-labelledby="h-su">
     <div class="chead"><h2 id="h-su">Supplements</h2><span class="tag" id="suppTag"></span></div>
     <div id="supps"></div>
     <p class="note">Only what you told me you actually take. Whey is convenience, not a requirement — 100 g paneer or 50 g dry soya does the same job for less money. Creatine at 3&ndash;5 g daily needs no loading phase and no specific timing; consistency is the whole trick. A multivitamin is insurance, not a diagnosis: if you want to act on B12, D3 or iron, get a blood test and let a doctor set the dose — iron especially should never be supplemented blind.</p>
   </section>
 
   <!-- ============ 9. INSIGHTS ============ -->
-  <div class="c8">
+  <div class="c12">
     <div class="ins-wrap">
       <div class="ins">
         <div class="chead"><h2>Coach Forge reads your numbers</h2><span class="tag">week 1 · recomp</span></div>
@@ -867,21 +819,8 @@ async function api(path, opts = {}){
   return res.status === 204 ? null : res.json();
 }
 
-// null when either time is missing. Defaulting a blank field to 00:00 made
-// bedtime and wake-up identical, which wrapped to a logged 24-hour night.
 const numOrNull = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
 const intOrNull = v => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
-
-function sleepMinutes(){
-  const bed = $('bed').value, wake = $('wake').value;
-  if(!bed || !wake) return null;
-  const [bh,bm] = bed.split(':').map(Number);
-  const [wh,wm] = wake.split(':').map(Number);
-  if([bh,bm,wh,wm].some(n => !Number.isFinite(n))) return null;
-  let mins = (wh*60+wm) - (bh*60+bm);
-  if(mins <= 0) mins += 1440;
-  return mins;
-}
 
 function currentDailyPayload(){
   return {
@@ -890,7 +829,6 @@ function currentDailyPayload(){
     // this on the server rather than sent
     meal_log: Object.fromEntries(MEAL_OPTIONS.map(slot => [slot.id, slotEntry(slot)])),
     supplements: S.supps.map(s => s.done),
-    sleep: { bed: $('bed').value, wake: $('wake').value, goal: S.sleep.goal, quality: $('slQual').value },
     // from the watch, typed in -- no longer derived from bed/wake times
     sleep_hours: numOrNull($('slHours').value),
     steps: intOrNull($('stepsIn').value),
@@ -1021,11 +959,6 @@ async function loadDailyAndWeight(date){
   for(const [id, e] of Object.entries(row.meal_log || {})) S.mealLog[id] = {...e, extras: e.extras || []};
   S.supps.forEach((s,i) => { s.done = !!(row.supplements && row.supplements[i]); });
   S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
-  const sleep = (row.sleep && typeof row.sleep === 'object') ? row.sleep : {};
-  $('bed').value = sleep.bed || '';
-  $('wake').value = sleep.wake || '';
-  if(sleep.goal){ $('slGoal').value = sleep.goal; S.sleep.goal = sleep.goal; }
-  $('slQual').value = sleep.quality || 'Okay';
   $('slHours').value = row.sleep_hours != null ? row.sleep_hours : '';
   $('stepsIn').value = row.steps != null ? row.steps : '';
   $('streak').value = row.streak != null ? row.streak : 0;
@@ -1145,7 +1078,6 @@ const S = {
   weight:null, start:null, goal:78, lastWeek:null,
   history:[],
   water:{target:3.4, glass:250, filled:0},
-  sleep:{week:[], goal:7.5},
   mealLog: {},
   supps:[
     {t:"7:45 AM", n:"Multivitamin", d:"1 tablet with breakfast",
@@ -2207,46 +2139,10 @@ $('todayW').addEventListener('blur', e => {
 /* =======================================================
    SLEEP
    ======================================================= */
-function paintSleep(){
-  const goal = parseFloat($('slGoal').value) || 7.5;
-  S.sleep.goal = goal;
-  $('slGoalLbl').textContent = goal + ' h';
-
-  // Both times are needed to get a duration at all. Until they're filled in
-  // there is nothing to show -- arithmetic on an empty <input type=time>
-  // yields NaN, which is what used to render as "NaNh NaNm".
-  const mins = sleepMinutes();
-  if(mins == null){
-    $('slDur').textContent = '––';
-    $('slDebt').textContent = '—';
-    $('sbars').innerHTML = '';
-    $('slHint').textContent = 'Enter last night’s bedtime and wake-up to start tracking.';
-    return;
-  }
-  $('slHint').textContent = '';
-  $('slDur').textContent = Math.floor(mins/60) + 'h ' + String(mins%60).padStart(2,'0') + 'm';
-
-  // No stored sleep history yet, so the chart shows only what's actually
-  // known: tonight. It fills out as real nights accumulate.
-  const wk = S.sleep.week.slice(0,6).concat([mins/60]);
-  const debt = wk.reduce((a,v) => a + Math.max(0, goal - v), 0);
-  $('slDebt').textContent = debt.toFixed(1) + ' h';
-
-  const maxH = Math.max(goal + 1.2, ...wk);
-  const names = ['M','T','W','T','F','S','S'].slice(-wk.length);
-  const bars = wk.map((v,i) =>
-    `<div class="sbar${v < goal ? ' short':''}"><i style="height:${v/maxH*100}%"></i><span>${names[i]}</span></div>`).join('');
-  $('sbars').innerHTML = `<div class="goalline" style="bottom:${goal/maxH*100*0.79 + 21}%"></div>` + bars;
-}
-['bed','wake','slGoal'].forEach(id => {
-  $(id).addEventListener('input', () => { paintSleep(); persist(); });
-  $(id).addEventListener('blur', () => persist.flush());
-});
 ['slHours','stepsIn'].forEach(id => {
   $(id).addEventListener('input', persist);
   $(id).addEventListener('blur', () => persist.flush());
 });
-$('slQual').addEventListener('change', persist);
 $('streak').addEventListener('input', persist);
 $('streak').addEventListener('blur', () => persist.flush());
 
@@ -2272,7 +2168,7 @@ $('todayChip').textContent = 'Today: ' + DAYS.find(d => d.k === DOW[new Date().g
 
 function paintDaily(){
   buildMeals(); recalc(); buildGlasses(); buildSupps();
-  paintWeight(); paintSpark(); paintSleep();
+  paintWeight(); paintSpark();
 }
 function paintAll(){
   buildDays(); paintDayPlan(); buildPrep(); buildExercises(); paintDaily(); countUp();
