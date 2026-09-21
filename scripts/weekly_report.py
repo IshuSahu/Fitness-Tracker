@@ -152,9 +152,9 @@ async def build(start: dt.date, end: dt.date) -> str:
     add("-" * 78)
     add("MEAL OPTIONS — EVERYTHING AVAILABLE")
     add("-" * 78)
-    add(wrap("Each slot has alternatives at roughly matched macros, so swapping "
-             "one does not move the daily total much. All vegetarian, no egg. "
-             "Option 1 is the current default."))
+    add(wrap("All vegetarian, no egg. Option 1 is the current default. "
+             "Options within a slot are not macro-matched -- check the kcal and "
+             "protein on each before swapping."))
     for slot in meal_options():
         add("")
         add(f"  {slot['n'].upper()} ({slot['t']})")

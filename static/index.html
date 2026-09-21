@@ -345,6 +345,14 @@ select option:disabled{color:var(--dim2)}
   font-family:'Space Grotesk',sans-serif}
 .meal-sel:focus{border-color:var(--gold);background:#1b2438}
 .meal.eaten .meal-sel{opacity:.6}
+.meal-custom,.meal-x{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
+.meal-custom .loginp,.meal-x .loginp{width:56px;font-size:11.5px;padding:4px 6px}
+.meal-custom .mc-name,.meal-x .mx-label{flex:1 1 100%;width:auto;min-width:0}
+.meal-x{padding-top:6px;border-top:1px dashed var(--line)}
+.xdel{background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);
+  width:24px;height:24px;line-height:1;cursor:pointer;font-size:14px;padding:0}
+.xdel:hover{color:var(--ember);border-color:rgba(255,106,61,.4)}
+.xadd{margin-top:7px;font-size:11px;padding:4px 9px}
 .meal-n{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:500}
 .meal-t{font-size:11px;color:var(--gold);font-family:'Space Grotesk',sans-serif}
 .meal-f{font-size:12px;color:var(--dim);margin-top:4px}
@@ -859,10 +867,6 @@ async function api(path, opts = {}){
   return res.status === 204 ? null : res.json();
 }
 
-function eatenTotals(){
-  return S.meals.filter(m => m.eaten)
-    .reduce((a, m) => ({ k: a.k + m.k, p: a.p + m.p, c: a.c + m.c, f: a.f + m.fa }), { k:0, p:0, c:0, f:0 });
-}
 // null when either time is missing. Defaulting a blank field to 00:00 made
 // bedtime and wake-up identical, which wrapped to a logged 24-hour night.
 const numOrNull = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
@@ -880,14 +884,13 @@ function sleepMinutes(){
 }
 
 function currentDailyPayload(){
-  const t = eatenTotals();
   return {
     water_l: +((S.water.filled * S.water.glass / 1000).toFixed(3)),
-    meals: S.meals.map(m => m.eaten),
-    meal_choices: S.mealChoice.slice(),
+    // every slot, so the stored day is complete; totals are derived from
+    // this on the server rather than sent
+    meal_log: Object.fromEntries(MEAL_OPTIONS.map(slot => [slot.id, slotEntry(slot)])),
     supplements: S.supps.map(s => s.done),
     sleep: { bed: $('bed').value, wake: $('wake').value, goal: S.sleep.goal, quality: $('slQual').value },
-    kcal_eaten: t.k, protein_g: t.p, carbs_g: t.c, fat_g: t.f,
     // from the watch, typed in -- no longer derived from bed/wake times
     sleep_hours: numOrNull($('slHours').value),
     steps: intOrNull($('stepsIn').value),
@@ -1013,13 +1016,9 @@ async function loadPlan(dayKey){
 // quietly substituting defaults is what made an offline page look live.
 async function loadDailyAndWeight(date){
   const row = await api('/api/daily?date=' + date);
-  S.meals.forEach((m,i) => { m.eaten = !!(row.meals && row.meals[i]); });
-  // fall back to the default option for any slot the stored array doesn't cover
-  S.mealChoice = MEAL_OPTIONS.map((slot,i) => {
-    const v = row.meal_choices && row.meal_choices[i];
-    return (Number.isInteger(v) && v >= 0 && v < slot.opts.length) ? v : 0;
-  });
-  applyMealChoices();
+  // slots missing from the stored day fall back to their default in slotEntry
+  S.mealLog = {};
+  for(const [id, e] of Object.entries(row.meal_log || {})) S.mealLog[id] = {...e, extras: e.extras || []};
   S.supps.forEach((s,i) => { s.done = !!(row.supplements && row.supplements[i]); });
   S.water.filled = row.water_l ? Math.round(row.water_l * 1000 / S.water.glass) : 0;
   const sleep = (row.sleep && typeof row.sleep === 'object') ? row.sleep : {};
@@ -1065,129 +1064,76 @@ async function loadAllFromApi(){
 /* =======================================================
    STATE
    ======================================================= */
-// Each slot carries alternatives that hit roughly the same macros, so
-// swapping one never quietly wrecks the day's totals. All vegetarian, no egg.
-// Option 0 is the default plan.
+// The meal catalog. Ids are stable -- a day stores the chosen option's id
+// and a copy of its macros, so editing or removing an option here never
+// changes a past day. All vegetarian, no egg. Option 0 is the default.
 const MEAL_OPTIONS = [
-  {n:"Breakfast", t:"7:45 AM", opts:[
-    {label:"Oats + paneer bhurji",
-     f:"Oats 35 g cooked in 200 ml toned milk · paneer bhurji (100 g low-fat paneer, ½ tsp oil) · 1 banana",
-     k:550,p:30,c:61,fa:23,
-     prep:"Bhurji on Sunday for two days; oats in the microwave in 3 min."},
-    {label:"Moong dal chilla + curd",
-     f:"Moong dal chilla ×2 (60 g dry moong dal) · 150 g curd",
-     k:545,p:32,c:56,fa:18,
-     prep:"Highest protein of the five. Soak the dal overnight, or 20 minutes in hot water if you forgot."},
-    {label:"Besan chilla + curd",
-     f:"Besan chilla ×2 (60 g besan, onion, ½ tsp oil) · 150 g curd",
-     k:540,p:31,c:52,fa:22,
-     prep:"Nothing to soak, nothing to plan — besan is always in the house. This is the no-prep fallback."},
-    {label:"Poha + milk + whey",
-     f:"Poha with peanuts · 200 ml toned milk · ½ scoop whey",
-     k:560,p:31,c:67,fa:18,
-     prep:"Fastest cooked option, about 10 minutes. The half scoop is what keeps poha from being a protein hole."},
-    {label:"Curd + muesli (no cooking)",
-     f:"200 g curd · 30 g muesli · 1 banana · 10 g peanut butter",
-     k:555,p:27,c:70,fa:19,
-     prep:"Zero cooking, zero stove. For mornings you are already late."},
+  {id:"breakfast", n:"Breakfast", t:"7:45 AM", opts:[
+    {id:"bf-poha-whey", label:"Poha + whey",
+     f:"Poha 55g dry with peanuts (10g) and 1 tsp oil · 1 scoop whey stirred in",
+     k:420,p:30,c:46,fa:13},
+    {id:"bf-2-grilled-paneer-loaded-sandwiches", label:"2 grilled paneer loaded sandwiches",
+     f:"4 slices brown bread · 100g low-fat paneer filling with onion/capsicum/tomato · light ghee for grilling",
+     k:445,p:26,c:55,fa:13},
+    {id:"bf-overnight-oats", label:"Overnight oats",
+     f:"40g oats soaked overnight in 200ml toned milk · 150g curd · 10g peanut butter",
+     k:420,p:21,c:45,fa:19},
+    {id:"bf-grilled-oats-peanut-butter-whey", label:"Grilled oats + peanut butter + whey",
+     f:"40g oats cooked in 150ml milk · 1 tbsp peanut butter · 1 scoop whey stirred in",
+     k:460,p:39,c:38,fa:17},
   ]},
-  {n:"Lunch", t:"1:15 PM", opts:[
-    {label:"Dal + soya keema",
-     f:"2 chapati · 1 katori dal · soya keema (40 g dry soya, onion-tomato, 1 tsp oil) · 100 g sabji · 150 g curd · salad",
-     k:670,p:43,c:80,fa:19,
-     prep:"Carry the soya keema in your tiffin — it is the protein anchor of your day."},
-    {label:"Rajma + curd",
-     f:"2 chapati · rajma (60 g dry) · 150 g curd · salad",
-     k:660,p:38,c:85,fa:16,
-     prep:"About 5 g under on protein — an extra 100 g curd closes it if the day is light elsewhere."},
-    {label:"Chole + jeera rice",
-     f:"Jeera rice (150 g cooked) · chole (60 g dry) · 150 g curd · salad",
-     k:680,p:36,c:92,fa:17,
-     prep:"The carb-heaviest lunch. Good on a legs day, worth topping up with curd for protein."},
-    {label:"Paneer bhurji",
-     f:"2 chapati · paneer bhurji (100 g low-fat paneer, 1 tsp oil) · 100 g sabji · 150 g curd",
-     k:665,p:42,c:72,fa:22,
-     prep:"Closest match to the default on protein. Paneer cooks in 6 minutes from cold."},
-    {label:"Moong dal khichdi",
-     f:"Moong dal khichdi · 150 g curd · salad",
-     k:650,p:34,c:88,fa:15,
-     prep:"One pot, lightest on prep and on the stomach. The easiest lunch to make the night before."},
+  {id:"lunch", n:"Lunch", t:"1:15 PM", opts:[
+    {id:"ln-sabji-grilled-paneer-rice", label:"Sabji + grilled paneer + rice",
+     f:"150g cooked rice · 100g paneer, grilled · 150g mixed sabji · 1 katori dal · 150g curd · salad",
+     k:700,p:38,c:85,fa:24},
+    {id:"ln-mixed-soya-rice-with-veggies", label:"Mixed soya + rice with veggies",
+     f:"40g dry soya chunks cooked with 100g mixed vegetables · 150g cooked rice · 150g curd",
+     k:535,p:32,c:72,fa:11},
   ]},
-  {n:"Pre-workout", t:"7:30 PM", opts:[
-    {label:"Brown bread + peanut butter",
+  {id:"preworkout", n:"Pre-workout", t:"7:30 PM", opts:[
+    {id:"pw-brown-bread-peanut-butter", label:"Brown bread + peanut butter",
      f:"2 slices brown bread · 10 g peanut butter",
      k:200,p:8,c:28,fa:7,
      prep:"Your current habit, kept. Portion and timing are right — peanut butter trimmed to 10 g so fat doesn't sit heavy."},
-    {label:"Banana + almonds",
+    {id:"pw-banana-almonds", label:"Banana + almonds",
      f:"1 banana · 6 almonds",
      k:195,p:5,c:28,fa:8,
      prep:"Nothing to prepare and nothing to carry. Fine when you're heading straight from work."},
-    {label:"Apple + roasted chana",
+    {id:"pw-apple-roasted-chana", label:"Apple + roasted chana",
      f:"1 apple · 15 g roasted chana",
      k:190,p:6,c:34,fa:3,
      prep:"Lowest fat of the four, so it sits lightest if you lift soon after eating."},
-    {label:"Muesli + milk",
+    {id:"pw-muesli-milk", label:"Muesli + milk",
      f:"30 g muesli · 100 ml toned milk",
      k:205,p:7,c:32,fa:5,
      prep:"Desk-friendly. Keep the muesli at work and this needs no planning at all."},
   ]},
-  {n:"Post-workout", t:"9:20 PM", opts:[
-    {label:"Whey shake",
-     f:"1 scoop whey (30 g) in 300 ml water",
-     k:120,p:24,c:2,fa:2,
-     prep:"Shake it at the gym or in the auto home. No rush — the window is hours wide."},
-    {label:"Paneer cubes",
-     f:"150 g low-fat paneer, cubed, with salt and chaat masala",
-     k:180,p:25,c:4,fa:8,
-     prep:"Whole-food equal of the shake on protein. Cheapest way to skip whey entirely."},
-    {label:"Milk + half scoop",
-     f:"250 ml toned milk · ½ scoop whey",
-     k:175,p:18,c:12,fa:5,
-     prep:"Stretches the tub when whey is running low."},
-    {label:"Curd + honey (low protein)",
-     f:"200 g curd · 1 tsp honey",
-     k:160,p:12,c:18,fa:5,
-     prep:"Half the protein of a shake — a genuine fallback for when the whey has run out, not an equal swap. Expect to make up ~12 g elsewhere."},
+  {id:"postworkout", n:"Post-workout", t:"9:20 PM", opts:[
+    {id:"po-whey-shake", label:"Whey shake",
+     f:"1 scoop whey (30g) in 300ml water",
+     k:120,p:24,c:2,fa:2},
   ]},
-  {n:"Dinner", t:"10:00 PM", opts:[
-    {label:"Soya chunk sabji",
-     f:"2 chapati · soya chunk sabji (50 g dry soya, 1 tsp oil) · 100 g mixed sabji · salad",
-     k:465,p:35,c:61,fa:10,
-     prep:"Soak the soya before you leave for the gym; sabji is 8 minutes when you walk in."},
-    {label:"Paneer sabji",
-     f:"2 chapati · paneer sabji (100 g low-fat paneer, 1 tsp oil) · salad",
-     k:470,p:33,c:52,fa:14,
-     prep:"No soaking. The one to pick when you got home later than planned."},
-    {label:"Tofu bhurji",
-     f:"2 chapati · tofu bhurji (150 g tofu, 1 tsp oil) · 100 g sabji · salad",
-     k:455,p:30,c:54,fa:15,
-     prep:"Lighter on the gut than paneer late at night, if dinner at 10 PM sits heavy."},
-    {label:"Chana masala",
-     f:"2 chapati · chana masala (50 g dry kabuli chana) · salad",
-     k:470,p:28,c:68,fa:10,
-     prep:"Lowest protein here at 28 g — best on a day lunch already ran high."},
-    {label:"Khichdi + curd",
-     f:"Moong dal khichdi · 150 g curd · salad",
-     k:460,p:26,c:66,fa:11,
-     prep:"The recovery-day dinner. One pot, 15 minutes, nothing to think about."},
+  {id:"dinner", n:"Dinner", t:"10:00 PM", opts:[
+    {id:"dn-1-chapati-light-paneer-bhurji", label:"1 chapati + light paneer bhurji",
+     f:"1 chapati · 60g low-fat paneer bhurji · small sautéed veg",
+     k:190,p:13,c:21,fa:7},
+    {id:"dn-soya-sabji-no-chapati", label:"Soya sabji, no chapati",
+     f:"30g dry soya chunks, light oil, tomato-onion, small veg",
+     k:140,p:16,c:13,fa:3},
+    {id:"dn-paneer-cubes-curd-no-cooking", label:"Paneer cubes + curd (no cooking)",
+     f:"75g paneer cubes, salt + chaat masala · 100g curd",
+     k:150,p:16,c:7,fa:7},
   ]},
-  {n:"Before bed", t:"11:15 PM", opts:[
-    {label:"Milk + roasted chana",
-     f:"200 ml toned milk · 15 g roasted chana",
-     k:175,p:10,c:19,fa:8,
-     prep:"Optional but useful — slow protein across your overnight fast."},
-    {label:"Curd",
-     f:"200 g curd, plain",
-     k:150,p:11,c:12,fa:5,
-     prep:"Slightly more protein for slightly fewer calories than the milk."},
-    {label:"Milk + almonds",
-     f:"200 ml toned milk · 5 soaked almonds",
-     k:180,p:8,c:13,fa:10,
-     prep:"Soak the almonds in the morning and they're waiting for you."},
-    {label:"Skip tonight",
-     f:"Nothing — closing the day here",
-     k:0,p:0,c:0,fa:0,
-     prep:"A real choice, not a failure. If the day already hit its protein and calorie targets, skipping this is the right call."},
+  {id:"beforebed", n:"Before bed", t:"11:15 PM", opts:[
+    {id:"bb-milk-roasted-chana", label:"Milk + roasted chana",
+     f:"200ml toned milk · 15g roasted chana",
+     k:175,p:10,c:19,fa:8},
+    {id:"bb-milk-makhana", label:"Milk + makhana",
+     f:"200ml toned milk · 15g roasted makhana",
+     k:168,p:8,c:21,fa:7},
+    {id:"bb-skip-tonight", label:"Skip tonight",
+     f:"A real choice, not a failure — skip if the day already hit target",
+     k:0,p:0,c:0,fa:0},
   ]},
 ];
 
@@ -1200,8 +1146,7 @@ const S = {
   history:[],
   water:{target:3.4, glass:250, filled:0},
   sleep:{week:[], goal:7.5},
-  mealChoice: MEAL_OPTIONS.map(() => 0),
-  meals: MEAL_OPTIONS.map(s => ({n:s.n, t:s.t, ...s.opts[0], eaten:false})),
+  mealLog: {},
   supps:[
     {t:"7:45 AM", n:"Multivitamin", d:"1 tablet with breakfast",
      p:"Take it with food — fat-soluble vitamins need it. Insurance, not a substitute for a blood test.", done:false},
@@ -1948,64 +1893,180 @@ function buildExercises(){
 /* =======================================================
    MEALS · CALORIES · MACROS
    ======================================================= */
-// Rewrites each slot's food and macros from the currently chosen option,
-// leaving the eaten tick alone. Everything downstream keeps reading S.meals.
-function applyMealChoices(){
-  MEAL_OPTIONS.forEach((slot, i) => {
-    const o = slot.opts[S.mealChoice[i]] || slot.opts[0];
-    Object.assign(S.meals[i], {n:slot.n, t:slot.t, f:o.f, k:o.k, p:o.p, c:o.c, fa:o.fa, prep:o.prep});
-  });
+// S.mealLog is the day's record, keyed by slot id: the chosen option's name
+// and macros, the eaten flag, and any extras. Macros are copied onto the day
+// when an option is picked, so later catalog edits can't change a past day --
+// the catalog is consulted to choose, never to sum.
+const MACRO_KEYS = ['kcal', 'protein_g', 'carbs_g', 'fat_g'];
+
+function snapshotOption(o){
+  return {option_id: o.id, name: o.label, kcal: o.k, protein_g: o.p, carbs_g: o.c, fat_g: o.fa};
+}
+
+// A slot the stored day doesn't mention starts on its first option, uneaten.
+function slotEntry(slot){
+  if(!S.mealLog[slot.id]) S.mealLog[slot.id] = {eaten: false, ...snapshotOption(slot.opts[0]), extras: []};
+  return S.mealLog[slot.id];
+}
+
+// A slot's own macros plus all of its extras.
+function entryMacros(e){
+  const t = {};
+  for(const k of MACRO_KEYS) t[k] = (+e[k] || 0) + (e.extras || []).reduce((a, x) => a + (+x[k] || 0), 0);
+  return t;
+}
+
+function sumSlots(onlyEaten){
+  const t = {kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0};
+  for(const slot of MEAL_OPTIONS){
+    const e = slotEntry(slot);
+    if(onlyEaten && !e.eaten) continue;
+    const m = entryMacros(e);
+    for(const k of MACRO_KEYS) t[k] += m[k];
+  }
+  return t;
+}
+
+// Drives the live ring and bars only. The stored totals are computed by
+// meal_totals() on the server from the same meal_log, by the same rule.
+const mealTotals = () => sumSlots(true);
+
+// Typed text goes into the page as markup, so it is escaped -- a meal called
+// 6" sub would otherwise break out of its input's value attribute.
+const esc = v => String(v ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+
+// Blank or negative reads as 0. The server rejects negative macros outright,
+// which would fail the whole day's save rather than just that field.
+const macroIn = v => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+const showNum = n => (+n > 0 ? +n : '');   // an empty field shows its placeholder
+
+const MACRO_FIELDS = [['kcal', 'kcal'], ['protein_g', 'P g'], ['carbs_g', 'C g'], ['fat_g', 'F g']];
+
+function macroInputs(attr, vals, what){
+  return MACRO_FIELDS.map(([k, ph]) =>
+    `<input type="number" class="loginp" min="0" step="any" placeholder="${ph}"
+      value="${showNum(vals[k])}" ${attr} data-f="${k}" aria-label="${ph} for ${what}">`).join('');
 }
 
 function buildMeals(){
-  applyMealChoices();
-  $('meals').innerHTML = S.meals.map((m,i) => {
-    const slot = MEAL_OPTIONS[i];
-    const sel = slot.opts.length > 1 ? `
-        <select class="meal-sel" data-mealopt="${i}" aria-label="Choose what to eat for ${m.n}">
-          ${slot.opts.map((o,j) =>
-            `<option value="${j}"${j === S.mealChoice[i] ? ' selected' : ''}>${o.label}</option>`).join('')}
-        </select>` : '';
-    return `
-    <div class="meal${m.eaten?' eaten':''}">
-      <button class="tick" aria-pressed="${m.eaten}" data-meal="${i}" aria-label="Mark ${m.n} as eaten">✓</button>
-      <div class="meal-b">
-        <div class="meal-h"><span class="meal-n">${m.n}</span><span class="meal-t">${m.t}</span></div>${sel}
-        <div class="meal-f">${m.f}</div>
+  const M = $('meals');
+  M.innerHTML = MEAL_OPTIONS.map((slot, i) => {
+    const e = slotEntry(slot);
+    const custom = e.option_id === 'custom';
+    const cat = custom ? null : slot.opts.find(o => o.id === e.option_id);
+    // a past day whose option has since left the catalog still shows what was eaten
+    const gone = (custom || cat) ? '' :
+      `<option value="${esc(e.option_id)}" selected disabled>${esc(e.name)} (no longer in the plan)</option>`;
+    const sel = `
+        <select class="meal-sel" data-mealopt="${i}" aria-label="Choose what to eat for ${slot.n}">
+          ${gone}${slot.opts.map(o =>
+            `<option value="${o.id}"${o.id === e.option_id ? ' selected' : ''}>${o.label}</option>`).join('')}
+          <option value="custom"${custom ? ' selected' : ''}>Other…</option>
+        </select>`;
+    const body = custom ? `
+        <div class="meal-custom">
+          <input type="text" class="loginp mc-name" placeholder="What you ate" value="${esc(e.name)}"
+            data-cust="${i}" data-f="name" aria-label="What you ate for ${slot.n}">
+          ${macroInputs(`data-cust="${i}"`, e, slot.n)}
+        </div>` : `
+        <div class="meal-f">${cat ? cat.f : esc(e.name)}</div>
         <div class="mac">
-          <span class="k">${m.k} kcal</span><span class="pr">P ${m.p} g</span>
-          <span>C ${m.c} g</span><span>F ${m.fa} g</span>
+          <span class="k">${fmt(e.kcal)} kcal</span><span class="pr">P ${e.protein_g} g</span>
+          <span>C ${e.carbs_g} g</span><span>F ${e.fat_g} g</span>
         </div>
-        ${m.prep?`<div class="meal-p">${m.prep}</div>`:''}
+        ${cat && cat.prep ? `<div class="meal-p">${cat.prep}</div>` : ''}`;
+    const extras = e.extras.map((x, j) => `
+        <div class="meal-x">
+          <input type="text" class="loginp mx-label" placeholder="Extra, e.g. chapati" value="${esc(x.label)}"
+            data-x="${i}-${j}" data-f="label" aria-label="Extra ${j + 1} for ${slot.n}">
+          ${macroInputs(`data-x="${i}-${j}"`, x, `extra ${j + 1} on ${slot.n}`)}
+          <button type="button" class="xdel" data-xdel="${i}-${j}"
+            aria-label="Remove extra ${j + 1} from ${slot.n}">×</button>
+        </div>`).join('');
+    return `
+    <div class="meal${e.eaten?' eaten':''}">
+      <button class="tick" aria-pressed="${e.eaten}" data-meal="${i}" aria-label="Mark ${slot.n} as eaten">✓</button>
+      <div class="meal-b">
+        <div class="meal-h"><span class="meal-n">${slot.n}</span><span class="meal-t">${slot.t}</span></div>${sel}
+        ${body}
+        ${extras}
+        <button type="button" class="navbtn xadd" data-xadd="${i}">+ Add extra</button>
       </div>
     </div>`;
   }).join('');
-  $('meals').querySelectorAll('[data-meal]').forEach(b =>
-    b.addEventListener('click', () => { const i=+b.dataset.meal; S.meals[i].eaten=!S.meals[i].eaten; buildMeals(); recalc(); persist(); }));
-  $('meals').querySelectorAll('[data-mealopt]').forEach(sel =>
+
+  M.querySelectorAll('[data-meal]').forEach(b =>
+    b.addEventListener('click', () => {
+      const e = slotEntry(MEAL_OPTIONS[+b.dataset.meal]);
+      e.eaten = !e.eaten;
+      buildMeals(); recalc(); persist();
+    }));
+  M.querySelectorAll('[data-mealopt]').forEach(sel =>
     sel.addEventListener('change', () => {
-      S.mealChoice[+sel.dataset.mealopt] = +sel.value;
+      const i = +sel.dataset.mealopt, slot = MEAL_OPTIONS[i], e = slotEntry(slot);
+      if(sel.value === 'custom'){
+        Object.assign(e, {option_id: 'custom', name: '', kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0});
+      }else{
+        const o = slot.opts.find(x => x.id === sel.value);
+        if(o) Object.assign(e, snapshotOption(o));
+      }
+      // eaten and extras are left exactly as they were
+      buildMeals(); recalc(); persist();
+      if(sel.value === 'custom') M.querySelector(`[data-cust="${i}"][data-f="name"]`).focus();
+    }));
+  // Typing updates the day in place instead of rebuilding the list: a rebuild
+  // replaces the field being typed into and drops focus mid-word. The ring and
+  // bars still move on every keystroke through recalc().
+  M.querySelectorAll('[data-cust]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const e = slotEntry(MEAL_OPTIONS[+inp.dataset.cust]);
+      e[inp.dataset.f] = inp.dataset.f === 'name' ? inp.value : macroIn(inp.value);
+      recalc(); persist();
+    });
+    inp.addEventListener('blur', () => persist.flush());
+  });
+  M.querySelectorAll('[data-x]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const [i, j] = inp.dataset.x.split('-').map(Number);
+      const x = slotEntry(MEAL_OPTIONS[i]).extras[j];
+      x[inp.dataset.f] = inp.dataset.f === 'label' ? inp.value : macroIn(inp.value);
+      recalc(); persist();
+    });
+    inp.addEventListener('blur', () => persist.flush());
+  });
+  M.querySelectorAll('[data-xadd]').forEach(b =>
+    b.addEventListener('click', () => {
+      const i = +b.dataset.xadd, e = slotEntry(MEAL_OPTIONS[i]);
+      e.extras.push({label: '', kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0});
+      buildMeals(); recalc(); persist();
+      M.querySelector(`[data-x="${i}-${e.extras.length - 1}"][data-f="label"]`).focus();
+    }));
+  M.querySelectorAll('[data-xdel]').forEach(b =>
+    b.addEventListener('click', () => {
+      const [i, j] = b.dataset.xdel.split('-').map(Number);
+      slotEntry(MEAL_OPTIONS[i]).extras.splice(j, 1);
       buildMeals(); recalc(); persist();
     }));
 }
 
 const RING_C = 477.5;
 function recalc(){
-  const t = eatenTotals();   // same summer the persistence path uses
+  const t = mealTotals();
   const T = S.targets;
 
-  // what the full day adds up to if every meal is eaten as currently chosen
-  const plan = S.meals.reduce((a,m) => ({k:a.k+m.k, p:a.p+m.p, c:a.c+m.c, f:a.f+m.fa}), {k:0,p:0,c:0,f:0});
-  $('fdK').textContent = fmt(plan.k) + ' kcal';
-  $('fdP').textContent = Math.round(plan.p) + ' g';
-  $('fdC').textContent = Math.round(plan.c) + ' g';
-  $('fdF').textContent = Math.round(plan.f) + ' g';
+  // what the full day adds up to if every slot is eaten as currently set up
+  const plan = sumSlots(false);
+  $('fdK').textContent = fmt(plan.kcal) + ' kcal';
+  $('fdP').textContent = Math.round(plan.protein_g) + ' g';
+  $('fdC').textContent = Math.round(plan.carbs_g) + ' g';
+  $('fdF').textContent = Math.round(plan.fat_g) + ' g';
 
-  $('kEaten').textContent = fmt(t.k);
-  const left = T.kcal - t.k;
+  $('kEaten').textContent = fmt(t.kcal);
+  const left = T.kcal - t.kcal;
   $('kLeft').textContent = left >= 0 ? fmt(left) : '+' + fmt(-left) + ' over';
   $('kLeft').style.color = left >= 0 ? '' : '#F87171';
-  $('ring').style.strokeDashoffset = RING_C * (1 - Math.min(t.k/T.kcal, 1));
+  $('ring').style.strokeDashoffset = RING_C * (1 - Math.min(t.kcal/T.kcal, 1));
 
   const set = (key, eaten, target, unit) => {
     const pct = Math.min(eaten/target*100, 100);
@@ -2015,7 +2076,7 @@ function recalc(){
     const rem = target - eaten;
     $(key+'Left').textContent = rem > 0 ? `${Math.round(rem)} ${unit} to go` : `${Math.round(-rem)} ${unit} over`;
   };
-  set('p', t.p, T.p, 'g'); set('c', t.c, T.c, 'g'); set('f', t.f, T.f, 'g');
+  set('p', t.protein_g, T.p, 'g'); set('c', t.carbs_g, T.c, 'g'); set('f', t.fat_g, T.f, 'g');
 }
 
 /* =======================================================

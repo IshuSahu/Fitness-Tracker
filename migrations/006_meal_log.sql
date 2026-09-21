@@ -1,0 +1,26 @@
+-- Per-slot meal record for each day: which option was eaten, its macros, and
+-- any extras on top.
+--
+-- Replaces the pair of positional arrays daily_logs.meals (eaten flags) and
+-- daily_logs.meal_choices (index into the frontend catalog). Those stored a
+-- *position* and recomputed macros from the current catalog on every save, so
+-- editing the catalog silently rewrote past days. meal_log instead snapshots
+-- the macros on the day: the catalog is consulted when choosing, never when
+-- summing.
+--
+-- Shape, keyed by slot id (breakfast, lunch, preworkout, postworkout, dinner,
+-- beforebed):
+--   { "<slot>": { "eaten": bool, "option_id": "<catalog id>" | "custom",
+--                 "name": text, "kcal": n, "protein_g": n, "carbs_g": n,
+--                 "fat_g": n,
+--                 "extras": [ {"label": text, "kcal": n, "protein_g": n,
+--                              "carbs_g": n, "fat_g": n}, ... ] } }
+--
+-- Extras are stored whether or not the slot is eaten, and only counted when it
+-- is -- so unticking and re-ticking a meal doesn't lose them.
+--
+-- Existing rows were backfilled from meals + meal_choices resolved against the
+-- catalog as it stood before its replacement on 2026-09-21, with every
+-- rebuilt total checked against the stored kcal_eaten.
+
+alter table daily_logs add column if not exists meal_log jsonb not null default '{}'::jsonb;

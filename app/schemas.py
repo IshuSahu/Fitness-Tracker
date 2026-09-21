@@ -4,12 +4,32 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class MealExtra(BaseModel):
+    """Something eaten on top of a slot's chosen option."""
+    label: str = ""
+    kcal: float = Field(0, ge=0)
+    protein_g: float = Field(0, ge=0)
+    carbs_g: float = Field(0, ge=0)
+    fat_g: float = Field(0, ge=0)
+
+
+class MealSlot(BaseModel):
+    """One meal slot on one day. The macros are stored on the day rather than
+    looked up from the catalog, so editing the catalog can't rewrite history."""
+    eaten: bool = False
+    option_id: str = ""          # a catalog id, or "custom" for a typed entry
+    name: str = ""
+    kcal: float = Field(0, ge=0)
+    protein_g: float = Field(0, ge=0)
+    carbs_g: float = Field(0, ge=0)
+    fat_g: float = Field(0, ge=0)
+    # kept whether or not the slot is eaten; only counted toward totals when it is
+    extras: list[MealExtra] = []
+
+
 class DailyOut(BaseModel):
     water_l: float = 0
-    meals: list[bool] = []
-    # which option was chosen per meal slot; indexes into the frontend's
-    # MEAL_OPTIONS, parallel to `meals`. Empty means every slot is on default.
-    meal_choices: list[int] = []
+    meal_log: dict[str, MealSlot] = {}
     supplements: list[bool] = []
     sleep: dict = {}
     kcal_eaten: Optional[int] = None
@@ -23,14 +43,13 @@ class DailyOut(BaseModel):
 
 class DailyIn(BaseModel):
     water_l: float = 0
-    meals: list[bool] = []
-    meal_choices: list[int] = []
+    # None means the client didn't send it (a page loaded before meal_log
+    # existed) -- the stored day is kept rather than overwritten with nothing.
+    meal_log: Optional[dict[str, MealSlot]] = None
     supplements: list[bool] = []
     sleep: dict = {}
-    kcal_eaten: Optional[int] = None
-    protein_g: Optional[float] = None
-    carbs_g: Optional[float] = None
-    fat_g: Optional[float] = None
+    # kcal_eaten / protein_g / carbs_g / fat_g are not accepted from the client:
+    # the server derives them from meal_log so they can never disagree with it.
     sleep_hours: Optional[float] = None
     steps: Optional[int] = None
     streak: int = 0

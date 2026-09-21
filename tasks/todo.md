@@ -1,86 +1,75 @@
-# Warm-up sets, manual watch metrics, treadmill units, coach week 2
+# Meal catalog replacement, "Other" option, per-slot extras
 
-## Context
-A five-item batch: a data correction, one feature, one unit bug, a schema plus
-UI addition, and this week's coach update. Backend-first; the only UI additions
-were the ones explicitly asked for.
+## Status: done and verified locally. Live Render app DOWN until pushed.
+
+## Step 0 findings (verified against code and live data)
+- Catalog: hardcoded `MEAL_OPTIONS` const in `static/index.html`. No DB table.
+- Per-slot option was already pickable, stored in a separate
+  `daily_logs.meal_choices` jsonb as a positional int array.
+- `daily_logs.meals` was a positional bool array; no longer tied to a fixed
+  default once meal_choices existed.
+- Hazard: choices were positional and totals recomputed from the *current*
+  catalog on every save, so replacing the catalog in place would have silently
+  rewritten past days the next time anything on them was saved.
 
 ## Steps
-- [x] 1. Flag the five mislabeled 1kg sets (squat, leg-press, rope-oh-ext) as
-      warm-ups. Left the unconfirmed db-shoulder-press 25kg x1 alone.
-- [x] 2. `warmup` accepted on POST /api/sets, stored on the row, with a toggle
-      beside the weight/reps inputs.
-- [x] 2. Confirmed empirically what lift_state does and does not exclude.
-- [x] 3. Treadmill duration reads minutes, not seconds.
-- [x] 4. `daily_logs.steps`; manual sleep-hours and steps inputs; sleep_hours
-      no longer derived from bed/wake; `weekly_report` replaced with the
-      steps-aware version.
-- [x] 5. Coach update for week 2 applied and confirmed.
-- [x] Verify: 32 new warm-up checks, UI checks for the toggle and units; 330
-      across twelve suites.
+- [x] 1. `meal_log jsonb not null default '{}'` added (migration 006).
+- [x] 2. Backfilled from meals + meal_choices against the OLD catalog. All 6
+      rows matched stored kcal_eaten, and P/C/F too; re-verified from the DB.
+- [x] 3. Backend + frontend read/write meal_log only. meals -> meals_legacy,
+      meal_choices -> meal_choices_legacy (migration 007). Frozen, not dropped.
+- [x] 4. Catalog replaced per spec; breakfast 4 is the full-scoop version.
+- [x] 5. "Other" custom option and "+ Add extra" on every slot.
+- [x] 6. Ring and all three macro bars recompute live on every change.
+- [x] 7. weekly_report verified against meal_log for 14-19 Sep.
 
 ## Review
 
-All five applied in order and verified against the live database.
+All seven steps done, each verified before moving on. 432 checks across 16
+suites pass.
 
-### What the warm-up confirmation actually found
+### What the data looks like now
+`meal_log` per day, keyed by slot id. Each slot stores `eaten`, `option_id`
+(a catalog id or `"custom"`), `name`, the four macros, and `extras`. The macros
+are copied onto the day when an option is picked, so the catalog is used to
+choose and never to sum. That is what keeps 19 Sep correct: its breakfast is
+still "Poha + milk + whey" at 560 kcal, shown as "no longer in the plan",
+even though that option was removed in step 4.
 
-Asked to confirm rather than assume, so it was probed empirically before
-touching anything. The picture was mixed:
+### Beyond the approved plan -- flagged, not hidden
+- **Totals are computed on the server**, and any totals the browser sends are
+  ignored. The weekly report reads kcal_eaten/protein_g, so they must never
+  disagree with meal_log. During the cutover a phone tab still running the old
+  page would read no `meals` field, show everything uneaten, and write zeros.
+  Deriving the totals server-side makes that impossible.
+- **A save without meal_log keeps the stored day** instead of wiping it, for
+  the same stale-tab reason.
+- **Boundary validation:** negative or non-numeric macros are rejected by the
+  server. The page clamps a typed negative to 0, so a stray minus sign can't
+  fail the whole day's save.
+- **kcal rounds half-up.** Python's `round()` rounds .5 to even, so 1390.5 was
+  stored as 1390 while the ring showed 1391. Matched to what the ring shows.
+- **Two now-false descriptions corrected.** The code comment and the coach's
+  report both said options within a slot were macro-matched. Lunch now spans
+  535 to 700 kcal.
+- The spec said "four small inputs" but listed five fields (name, kcal,
+  protein, carbs, fat). Built all five.
 
-- **`consecutive_misses` and `last_sets` already excluded warm-ups** — both
-  recompute from a query filtering `warmup = false`, so a pre-existing warm-up
-  row never reached them. Proved with a 100kg warm-up row: best stayed 26.67.
-- **`best_e1rm_kg` had a real gap.** It never reads the session; it passes the
-  row being inserted as the PR candidate. Harmless while `warmup` was
-  unsettable, but the moment the flag was accepted, logging a heavy ramp-up
-  would have set a PR. Now forced to 0 for warm-ups.
-
-Two further faults surfaced only because the tests exercised the new flag:
-
-- **Logging a warm-up as the first set of an exercise crashed** with
-  `max() iterable argument is empty` — `last_sets` excludes warm-ups, so there
-  was nothing to take a max over. Now `None`, meaning "no working set to judge".
-- **A warm-up moved the miss counter** from 3 to 4. Its own reps were correctly
-  excluded, but posting it re-triggered the evaluation against the existing
-  working sets. A warm-up is now inert for miss tracking.
-
-### Warm-up indexing
-
-`set_index` is unique per (session, exercise) and working sets occupy 0..n-1
-from the client's cursor, so a ramp-up logged first would have taken index 0
-and collided with the first working set. Warm-ups are stored from index 1000
-up, keeping the two ranges apart without a schema change.
-
-In the UI a warm-up does not fill a dot, does not advance the "Set N of M"
-counter, and the toggle stays on so consecutive ramp-ups are quick to enter.
-
-### Treadmill units
-
-The label came from `exercise.mode`, which had no value meaning minutes — only
-`time`, rendered as "sec". Added a `mins` mode handled in both label sites
-(dashboard and report) and set `incline-walk` to it, rather than special-casing
-an id in two places. Plank and stretch circuit are untouched and still read
-seconds.
-
-**Worth a look: `easy-walk` has the same problem.** It is `mode = time` and
-prescribed `1 x 35-45` on Thursday, which is plainly minutes, not 35 seconds.
-Left alone because the brief said incline-walk only — say the word and it is a
-one-line change.
-
-### Watch metrics
-
-`sleep_hours` now comes from a typed input and nothing else; the bed/wake/goal/
-quality fields stay on screen for reference but no longer feed it. The derived
-`sleepHoursNow()` was deleted rather than left dangling. Blank fields send null
-rather than a guess.
+### Test changes
+- `test_meals.py` retired: it tested the removed columns. It also crashed
+  mid-run and left a row on 2026-03-03, which was checked against its exact
+  fingerprint and deleted.
+- The vegetarian guard was a substring match and flagged "veggies" as egg.
+  Now `\beggs?\b`: catches egg, eggs, egg whites; ignores veggies, eggless.
+- Two step-snapshot tests updated for later, intentional changes.
 
 ### Worth knowing
-- Migration `005_daily_steps_and_report.sql` holds both the column and the
-  replaced function, applied to the live database.
-- The week-2 overrides are week-scoped: `session_template` is untouched, so
-  db-curl and cable-fly return to their base loads in week 3 unless renewed.
-- Pre-existing and out of brief: logging several working sets that all miss the
-  rep target increments `consecutive_misses` once per set rather than once per
-  session. Warm-ups no longer contribute, but the underlying double-count
-  remains.
+- **The live Render app has been down since step 3.** Render still runs
+  `f95a1fc`, which selects the renamed columns. Accepted as downtime; it comes
+  back when this is pushed.
+- **An all-defaults day is 1,805 kcal and 123 g protein**, below the 137 g
+  floor the report uses for "days on protein target". Every default-only day
+  will read as a miss in the coach's report.
+- **20 Sep is a logged-but-empty day** (kcal 0). A report covering it averages
+  in that zero. This was the case before this work; nothing here changed it.
+- `coach.py`'s swap is still a permanent global mutation. Not touched.
